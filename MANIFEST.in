@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+include pyproject.toml
+recursive-include cuemap *.py
+recursive-include examples *.py
+prune tests
+prune __pycache__
+global-exclude *.pyc
