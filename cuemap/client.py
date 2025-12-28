@@ -57,7 +57,8 @@ class CueMap:
         self,
         content: str,
         cues: List[str],
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        disable_temporal_chunking: bool = False
     ) -> str:
         """
         Add a memory.
@@ -81,7 +82,8 @@ class CueMap:
             json={
                 "content": content,
                 "cues": cues,
-                "metadata": metadata or {}
+                "metadata": metadata or {},
+                "disable_temporal_chunking": disable_temporal_chunking
             },
             headers=self._headers()
         )
@@ -95,47 +97,54 @@ class CueMap:
     
     def recall(
         self,
-        cues: List[str],
+        cues: Optional[List[str]] = None,
+        query_text: Optional[str] = None,
         limit: int = 10,
         auto_reinforce: bool = False,
         min_intersection: Optional[int] = None,
-        projects: Optional[List[str]] = None
+        projects: Optional[List[str]] = None,
+        explain: bool = False,
+        disable_pattern_completion: bool = False,
+        disable_salience_bias: bool = False,
+        disable_systems_consolidation: bool = False
     ) -> List[RecallResult]:
         """
-        Recall memories by cues.
+        Recall memories by cues or natural language.
         
         Args:
             cues: List of cues to search for
+            query_text: Natural language query to resolve via Lexicon
             limit: Maximum results to return
             auto_reinforce: Automatically reinforce retrieved memories
-            min_intersection: Minimum number of cues that must match (for strict AND logic)
-            projects: List of project IDs for cross-domain queries (multi-tenant only)
+            min_intersection: Minimum number of cues that must match
+            projects: List of project IDs for cross-domain queries
+            explain: Include recall explanation in results
             
         Returns:
             List of recall results
             
         Example:
-            >>> # OR logic (default): matches any cue
-            >>> results = client.recall(["meeting", "john"])
-            
-            >>> # AND logic: requires both cues
-            >>> results = client.recall(["meeting", "john"], min_intersection=2)
-            
-            >>> # Cross-domain query (multi-tenant)
-            >>> results = client.recall(["urgent"], projects=["sales", "support"])
+            >>> results = client.recall(query_text="payment failed", explain=True)
+            >>> for r in results:
+            ...     print(r.content, r.explain)
         """
         payload = {
-            "cues": cues,
             "limit": limit,
-            "auto_reinforce": auto_reinforce
+            "auto_reinforce": auto_reinforce,
+            "explain": explain,
+            "disable_pattern_completion": disable_pattern_completion,
+            "disable_salience_bias": disable_salience_bias,
+            "disable_systems_consolidation": disable_systems_consolidation
         }
-        
+        if cues:
+            payload["cues"] = cues
+        if query_text:
+            payload["query_text"] = query_text
         if min_intersection is not None:
             payload["min_intersection"] = min_intersection
-        
-        if projects is not None:
+        if projects:
             payload["projects"] = projects
-        
+
         response = self.client.post(
             "/recall",
             json=payload,
@@ -143,10 +152,102 @@ class CueMap:
         )
         
         if response.status_code != 200:
-            raise CueMapError(f"Failed to recall: {response.status_code}")
+            raise CueMapError(f"Failed to recall: {response.text}")
         
-        results = response.json()["results"]
+        data = response.json()
+        results = data["results"]
+        
+        if projects and isinstance(results, list) and len(results) > 0 and "project_id" in results[0]:
+            return data
+            
         return [RecallResult(**r) for r in results]
+    
+    def recall_grounded(
+        self,
+        query: str,
+        token_budget: int = 500,
+        limit: int = 10,
+        projects: Optional[List[str]] = None,
+        disable_pattern_completion: bool = False,
+        disable_salience_bias: bool = False,
+        disable_systems_consolidation: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Recall grounded context with token budgeting.
+        
+        Returns a dictionary containing:
+            - verified_context: The formatted context block string
+            - proof: Detailed GroundingProof object
+            - engine_latency_ms: Server-side latency
+        """
+        response = self.client.post(
+            "/recall/grounded",
+            json={
+                "query_text": query,
+                "token_budget": token_budget,
+                "limit": limit,
+                "projects": projects,
+                "disable_pattern_completion": disable_pattern_completion,
+                "disable_salience_bias": disable_salience_bias,
+                "disable_systems_consolidation": disable_systems_consolidation
+            },
+            headers=self._headers()
+        )
+        
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to recall grounded: {response.text}")
+        
+        return response.json()
+
+    def list_projects(self) -> List[str]:
+        """List all projects (multi-tenant only)."""
+        response = self.client.get(
+            "/projects",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to list projects: {response.text}")
+        return response.json()
+
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project (multi-tenant only)."""
+        response = self.client.delete(
+            f"/projects/{project_id}",
+            headers=self._headers()
+        )
+        return response.status_code == 200
+
+    def add_alias(self, from_cue: str, to_cue: str, weight: float = 1.0) -> bool:
+        """Add an alias (manual cue mapping)."""
+        response = self.client.post(
+            "/aliases",
+            json={"from": from_cue, "to": to_cue, "weight": weight},
+            headers=self._headers()
+        )
+        return response.status_code == 200
+
+    def get_aliases(self, cue: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all aliases, optionally filtered by cue."""
+        params = {}
+        if cue:
+            params["cue"] = cue
+        response = self.client.get(
+            "/aliases",
+            params=params,
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get aliases: {response.text}")
+        return response.json()
+
+    def merge_aliases(self, cues: List[str], to_cue: str) -> bool:
+        """Merge multiple cues into a canonical canonical cue."""
+        response = self.client.post(
+            "/aliases/merge",
+            json={"cues": cues, "to": to_cue},
+            headers=self._headers()
+        )
+        return response.status_code == 200
     
     def reinforce(self, memory_id: str, cues: List[str]) -> bool:
         """
@@ -247,7 +348,8 @@ class AsyncCueMap:
             json={
                 "content": content,
                 "cues": cues,
-                "metadata": metadata or {}
+                "metadata": metadata or {},
+                "disable_temporal_chunking": disable_temporal_chunking
             },
             headers=self._headers()
         )
@@ -261,25 +363,35 @@ class AsyncCueMap:
     
     async def recall(
         self,
-        cues: List[str],
+        cues: Optional[List[str]] = None,
+        query_text: Optional[str] = None,
         limit: int = 10,
         auto_reinforce: bool = False,
         min_intersection: Optional[int] = None,
-        projects: Optional[List[str]] = None
+        projects: Optional[List[str]] = None,
+        explain: bool = False,
+        disable_pattern_completion: bool = False,
+        disable_salience_bias: bool = False,
+        disable_systems_consolidation: bool = False
     ) -> List[RecallResult]:
         """Recall memories (async)."""
         payload = {
-            "cues": cues,
             "limit": limit,
-            "auto_reinforce": auto_reinforce
+            "auto_reinforce": auto_reinforce,
+            "explain": explain,
+            "disable_pattern_completion": disable_pattern_completion,
+            "disable_salience_bias": disable_salience_bias,
+            "disable_systems_consolidation": disable_systems_consolidation
         }
-        
+        if cues:
+            payload["cues"] = cues
+        if query_text:
+            payload["query_text"] = query_text
         if min_intersection is not None:
             payload["min_intersection"] = min_intersection
-        
-        if projects is not None:
+        if projects:
             payload["projects"] = projects
-        
+
         response = await self.client.post(
             "/recall",
             json=payload,
@@ -289,8 +401,93 @@ class AsyncCueMap:
         if response.status_code != 200:
             raise CueMapError(f"Failed to recall: {response.status_code}")
         
-        results = response.json()["results"]
+        data = response.json()
+        results = data["results"]
+        
+        if projects and isinstance(results, list) and len(results) > 0 and "project_id" in results[0]:
+            return data
+            
         return [RecallResult(**r) for r in results]
+    
+    async def recall_grounded(
+        self,
+        query: str,
+        token_budget: int = 500,
+        limit: int = 10,
+        projects: Optional[List[str]] = None,
+        disable_pattern_completion: bool = False,
+        disable_salience_bias: bool = False,
+        disable_systems_consolidation: bool = False
+    ) -> Dict[str, Any]:
+        """Recall grounded context (async)."""
+        response = await self.client.post(
+            "/recall/grounded",
+            json={
+                "query_text": query,
+                "token_budget": token_budget,
+                "limit": limit,
+                "projects": projects,
+                "disable_pattern_completion": disable_pattern_completion,
+                "disable_salience_bias": disable_salience_bias,
+                "disable_systems_consolidation": disable_systems_consolidation
+            },
+            headers=self._headers()
+        )
+        
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to recall grounded: {response.text}")
+        
+        return response.json()
+
+    async def list_projects(self) -> List[str]:
+        """List all projects (async, multi-tenant only)."""
+        response = await self.client.get(
+            "/projects",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to list projects: {response.text}")
+        return response.json()
+
+    async def delete_project(self, project_id: str) -> bool:
+        """Delete a project (async, multi-tenant only)."""
+        response = await self.client.delete(
+            f"/projects/{project_id}",
+            headers=self._headers()
+        )
+        return response.status_code == 200
+
+    async def add_alias(self, from_cue: str, to_cue: str, weight: float = 1.0) -> bool:
+        """Add an alias (async)."""
+        response = await self.client.post(
+            "/aliases",
+            json={"from": from_cue, "to": to_cue, "weight": weight},
+            headers=self._headers()
+        )
+        return response.status_code == 200
+
+    async def get_aliases(self, cue: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get aliases (async)."""
+        params = {}
+        if cue:
+            params["cue"] = cue
+        response = await self.client.get(
+            "/aliases",
+            params=params,
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get aliases: {response.text}")
+        return response.json()
+
+    async def merge_aliases(self, cues: List[str], to_cue: str) -> bool:
+        """Merge aliases (async)."""
+        response = await self.client.post(
+            "/aliases/merge",
+            json={"cues": cues, "to": to_cue},
+            headers=self._headers()
+        )
+        return response.status_code == 200
     
     async def reinforce(self, memory_id: str, cues: List[str]) -> bool:
         """Reinforce a memory (async)."""

@@ -249,7 +249,112 @@ from cuemap import AsyncCueMap
 
 async with AsyncCueMap() as client:
     await client.add("Note", cues=["work"])
-    results = await client.recall(["work"])
+    await client.recall(["work"])
+
+### Natural Language Recall (Deterministic)
+
+Use the built-in Lexicon to resolve human language into canonical cues.
+
+```python
+# Resolved via Lexicon: "payment" -> "service:payment", "timeout" -> "error:timeout"
+results = client.recall(query_text="payment timeout")
+```
+
+### Alias Management (Manual Control)
+
+Tweak the engine's deterministic mapping directly.
+
+```python
+# Add a manual alias
+client.add_alias(from_cue="pay", to_cue="service:payment", weight=0.9)
+
+# Merge multiple terms into one canonical cue
+client.merge_aliases(cues=["failed", "error", "bug"], to_cue="status:error")
+
+# List aliases
+aliases = client.get_aliases(cue="pay")
+```
+
+### Advanced Brain Control (Safety Audit)
+
+For peak determinism or specific recall strategies, you can disable brain-inspired features per-request.
+
+```python
+# 1. Disable Pattern Completion (Strict matching only, no associative inference)
+results = client.recall(
+    cues=["urgent"],
+    disable_pattern_completion=True
+)
+
+# 2. Disable Salience Bias (Ignore "importance" signals, use pure recency/frequency)
+results = client.recall(
+    query_text="server logs",
+    disable_salience_bias=True
+)
+
+# 3. Disable Systems Consolidation (Ignore summarized "gist" memories)
+results = client.recall(
+    query_text="project history",
+    disable_systems_consolidation=True
+)
+
+# 4. Disable Temporal Chunking (Stop automatic episode creation at write-time)
+client.add(
+    "Standalone event",
+    cues=["event"],
+    disable_temporal_chunking=True
+)
+```
+
+### Explainable Recall
+
+See how the query was normalized and expanded.
+
+```python
+results = client.recall(
+    query_text="payment failed",
+    explain=True
+)
+
+# Access explanation
+print(results[0].explain)
+```
+
+## Grounding & Token Budgeting (v0.5)
+
+CueMap v0.5 introduces the **Relevance Compression Engine** to prevent LLM hallucinations by providing a "Hallucination Guardrail".
+
+### Grounded Recall
+
+Get the most relevant context formatted specifically for LLM prompts, within a strict token budget.
+
+```python
+results = client.recall_grounded(
+    query="Why is the payment failing?",
+    token_budget=500,  # Strict limit
+    limit=10
+)
+
+print(results["verified_context"])
+# Output: [VERIFIED CONTEXT] (1) Fact... Rules: Use only context...
+```
+
+### CueMapGroundingRetriever (Middleware)
+
+A tiny library for easy integration into LangChain, LlamaIndex, or custom pipelines.
+
+```python
+from cuemap import CueMapGroundingRetriever
+
+retriever = CueMapGroundingRetriever()
+result = retriever.retrieve_grounded(
+    query_text="Why did the database fail?",
+    token_budget=300
+)
+
+# context ready for prompt injection
+prompt = f"Answer this query: {query}\n\n{result['verified_context_block']}"
+```
 ```
 
 ## Philosophy
