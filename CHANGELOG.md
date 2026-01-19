@@ -2,6 +2,20 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.6.0] - 2026-01-19
+
+### Added
+- **Ingestion API**: New methods `ingest_url`, `ingest_content`, and `ingest_file` for direct content ingestion.
+- **Lexicon Management**: New methods (`lexicon_wire`, `lexicon_inspect`, `lexicon_graph`, `lexicon_synonyms`, `lexicon_delete`) for manual control over the engine's associative graph.
+- **Job Status**: New `jobs_status()` method to track background ingestion progress.
+- **Brain Control Flags**: Added parameters to disable specific brain modules (`disable_pattern_completion`, `disable_salience_bias`, etc.) for deterministic debugging.
+
+### Changed
+- **BREAKING**: Refactored `recall` method signature. `query_text` is now the first positional argument, followed by `cues` and `projects`, to prioritize Natural Language Search.
+  - Old: `client.recall(cues=["tag"], query_text="search")`
+  - New: `client.recall("search", cues=["tag"])`
+- **Documentation**: Updated README to reflect the "Brain-Inspired" architecture and new API surface.
+
 ## [0.5.0] - 2025-12-27
 
 ### Added
@@ -45,4 +59,4 @@ All notable changes to the CueMap Python SDK will be documented in this file.
 - Basic memory ingestion and search methods.
 
 ---
-*Note: This version is designed to work with CueMap Rust Engine v0.5.x.*
+*Note: This version is designed to work with CueMap Rust Engine v0.6.x.*
