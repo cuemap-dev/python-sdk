@@ -97,12 +97,12 @@ class CueMap:
     
     def recall(
         self,
-        cues: Optional[List[str]] = None,
         query_text: Optional[str] = None,
+        cues: Optional[List[str]] = None,
+        projects: Optional[List[str]] = None,
         limit: int = 10,
         auto_reinforce: bool = False,
         min_intersection: Optional[int] = None,
-        projects: Optional[List[str]] = None,
         explain: bool = False,
         disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
@@ -112,19 +112,19 @@ class CueMap:
         Recall memories by cues or natural language.
         
         Args:
-            cues: List of cues to search for
             query_text: Natural language query to resolve via Lexicon
+            cues: List of cues to search for
+            projects: List of project IDs for cross-domain queries
             limit: Maximum results to return
             auto_reinforce: Automatically reinforce retrieved memories
             min_intersection: Minimum number of cues that must match
-            projects: List of project IDs for cross-domain queries
             explain: Include recall explanation in results
             
         Returns:
             List of recall results
             
         Example:
-            >>> results = client.recall(query_text="payment failed", explain=True)
+            >>> results = client.recall("payment failed", explain=True)
             >>> for r in results:
             ...     print(r.content, r.explain)
         """
@@ -291,6 +291,110 @@ class CueMap:
         
         return response.json()
     
+    # --- Lexicon Methods ---
+    
+    def lexicon_wire(self, token: str, canonical: str) -> Dict[str, Any]:
+        """Manually wire a token to a canonical cue."""
+        response = self.client.post(
+            "/lexicon/wire",
+            json={"token": token, "canonical": canonical},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to wire lexicon: {response.text}")
+        return response.json()
+
+    def lexicon_inspect(self, cue: str) -> Dict[str, Any]:
+        """Inspect a cue's relationships in the Lexicon."""
+        response = self.client.get(
+            f"/lexicon/inspect/{cue}",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to inspect lexicon: {response.text}")
+        return response.json()
+
+    def lexicon_graph(self) -> Dict[str, Any]:
+        """Get the full Lexicon graph."""
+        response = self.client.get(
+            "/lexicon/graph",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get lexicon graph: {response.text}")
+        return response.json()
+
+    def lexicon_synonyms(self, cue: str) -> Dict[str, Any]:
+        """Get WordNet synonyms and graph suggestions for a cue."""
+        response = self.client.get(
+            f"/lexicon/synonyms/{cue}",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get synonyms: {response.text}")
+        return response.json()
+
+    def lexicon_delete(self, memory_id: str) -> bool:
+        """Delete a Lexicon entry."""
+        response = self.client.delete(
+            f"/lexicon/entry/{memory_id}",
+            headers=self._headers()
+        )
+        return response.status_code == 200
+
+    # --- Ingestion Methods ---
+
+    def ingest_url(self, url: str) -> Dict[str, Any]:
+        """Ingest content from a URL."""
+        response = self.client.post(
+            "/ingest/url",
+            json={"url": url},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to ingest URL: {response.text}")
+        return response.json()
+
+    def ingest_content(self, content: str, filename: str = "content.txt") -> Dict[str, Any]:
+        """Ingest raw content."""
+        response = self.client.post(
+            "/ingest/content",
+            json={"content": content, "filename": filename},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to ingest content: {response.text}")
+        return response.json()
+
+    def ingest_file(self, file_path: str) -> Dict[str, Any]:
+        """Ingest a file (PDF, DOCX, etc.) via upload."""
+        import os
+        filename = os.path.basename(file_path)
+        with open(file_path, "rb") as f:
+            files = {"file": (filename, f)}
+            response = self.client.post(
+                "/ingest/file",
+                files=files,
+                headers=self._headers()
+            )
+        
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to ingest file: {response.text}")
+        return response.json()
+
+    # --- Job Status ---
+
+    def jobs_status(self) -> Dict[str, Any]:
+        """Get background job status for the current project."""
+        response = self.client.get(
+            "/jobs/status",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get job status: {response.text}")
+        return response.json()
+
+
     def close(self):
         """Close the client."""
         self.client.close()
@@ -309,7 +413,7 @@ class AsyncCueMap:
     Example:
         >>> async with AsyncCueMap() as client:
         ...     await client.add("Note", cues=["work"])
-        ...     results = await client.recall(["work"])
+        ...     results = await client.recall(cues=["work"])
     """
     
     def __init__(
@@ -363,12 +467,12 @@ class AsyncCueMap:
     
     async def recall(
         self,
-        cues: Optional[List[str]] = None,
         query_text: Optional[str] = None,
+        cues: Optional[List[str]] = None,
+        projects: Optional[List[str]] = None,
         limit: int = 10,
         auto_reinforce: bool = False,
         min_intersection: Optional[int] = None,
-        projects: Optional[List[str]] = None,
         explain: bool = False,
         disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
@@ -522,6 +626,109 @@ class AsyncCueMap:
         
         return response.json()
     
+    async def lexicon_wire(self, token: str, canonical: str) -> Dict[str, Any]:
+        """Manually wire a token to a canonical cue (async)."""
+        response = await self.client.post(
+            "/lexicon/wire",
+            json={"token": token, "canonical": canonical},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to wire lexicon: {response.text}")
+        return response.json()
+
+    async def lexicon_inspect(self, cue: str) -> Dict[str, Any]:
+        """Inspect a cue's relationships in the Lexicon (async)."""
+        response = await self.client.get(
+            f"/lexicon/inspect/{cue}",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to inspect lexicon: {response.text}")
+        return response.json()
+
+    async def lexicon_graph(self) -> Dict[str, Any]:
+        """Get the full Lexicon graph (async)."""
+        response = await self.client.get(
+            "/lexicon/graph",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get lexicon graph: {response.text}")
+        return response.json()
+
+    async def lexicon_synonyms(self, cue: str) -> Dict[str, Any]:
+        """Get WordNet synonyms and graph suggestions for a cue (async)."""
+        response = await self.client.get(
+            f"/lexicon/synonyms/{cue}",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get synonyms: {response.text}")
+        return response.json()
+
+    async def lexicon_delete(self, memory_id: str) -> bool:
+        """Delete a Lexicon entry (async)."""
+        response = await self.client.delete(
+            f"/lexicon/entry/{memory_id}",
+            headers=self._headers()
+        )
+        return response.status_code == 200
+
+    async def ingest_url(self, url: str) -> Dict[str, Any]:
+        """Ingest content from a URL (async)."""
+        response = await self.client.post(
+            "/ingest/url",
+            json={"url": url},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to ingest URL: {response.text}")
+        return response.json()
+
+    async def ingest_content(self, content: str, filename: str = "content.txt") -> Dict[str, Any]:
+        """Ingest raw content (async)."""
+        response = await self.client.post(
+            "/ingest/content",
+            json={"content": content, "filename": filename},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to ingest content: {response.text}")
+        return response.json()
+
+    async def ingest_file(self, file_path: str) -> Dict[str, Any]:
+        """Ingest a file (PDF, DOCX, etc.) via upload (async)."""
+        import os
+        filename = os.path.basename(file_path)
+        # Note: httpx.AsyncClient file upload usage
+        with open(file_path, "rb") as f:
+            # We must read content into memory for async upload if we don't use a stream wrapper,
+            # but standard open() file object might work with recent httpx.
+            # Safest for small files is reading bytes.
+            file_content = f.read()
+            
+        files = {"file": (filename, file_content)}
+        response = await self.client.post(
+            "/ingest/file",
+            files=files,
+            headers=self._headers()
+        )
+        
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to ingest file: {response.text}")
+        return response.json()
+
+    async def jobs_status(self) -> Dict[str, Any]:
+        """Get background job status for the current project (async)."""
+        response = await self.client.get(
+            "/jobs/status",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get job status: {response.text}")
+        return response.json()
+
     async def close(self):
         """Close the client."""
         await self.client.aclose()

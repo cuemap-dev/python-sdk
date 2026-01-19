@@ -2,13 +2,7 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
-## [0.5.1] - 2025-12-28
-
-### Added
-- **Configurable Brain Features**: Added `disable_temporal_chunking` to `add` and `disable_salience_bias`, `disable_systems_consolidation` to `recall` and `recall_grounded`.
-- **Match Integrity**: Full support for `match_integrity` field in `RecallResult`, replacing legacy confidence metrics.
-
-### [0.5.0] - 2025-12-28
+## [0.5.0] - 2025-12-27
 
 ### Added
 - **Asynchronous Client**: Introduced `CueMapAsyncClient` for high-performance non-blocking ingestion and recall.
