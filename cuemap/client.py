@@ -342,6 +342,65 @@ class CueMap:
         )
         return response.status_code == 200
 
+    # --- Context & Backup Methods ---
+
+    def context_expand(self, query: str, limit: int = 20, min_score: Optional[float] = None) -> Dict[str, Any]:
+        """Expand a query using the cue co-occurrence graph."""
+        payload = {"query": query, "limit": limit}
+        if min_score is not None:
+            payload["min_score"] = min_score
+            
+        response = self.client.post(
+            "/context/expand",
+            json=payload,
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to expand context: {response.text}")
+        return response.json()
+
+    def backup_upload(self, project_id: str) -> Dict[str, Any]:
+        """Upload project snapshot to cloud backup."""
+        response = self.client.post(
+            "/backup/upload",
+            json={"project_id": project_id},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to upload backup: {response.text}")
+        return response.json()
+
+    def backup_download(self, project_id: str) -> Dict[str, Any]:
+        """Download and load project snapshot from cloud backup."""
+        response = self.client.post(
+            "/backup/download",
+            json={"project_id": project_id},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to download backup: {response.text}")
+        return response.json()
+
+    def backup_list(self) -> Dict[str, Any]:
+        """List available cloud backups."""
+        response = self.client.get(
+            "/backup/list",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to list backups: {response.text}")
+        return response.json()
+        
+    def backup_delete(self, project_id: str) -> Dict[str, Any]:
+        """Delete a cloud backup."""
+        response = self.client.delete(
+            f"/backup/{project_id}",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to delete backup: {response.text}")
+        return response.json()
+
     # --- Ingestion Methods ---
 
     def ingest_url(self, url: str) -> Dict[str, Any]:
@@ -674,6 +733,63 @@ class AsyncCueMap:
             headers=self._headers()
         )
         return response.status_code == 200
+
+    async def context_expand(self, query: str, limit: int = 20, min_score: Optional[float] = None) -> Dict[str, Any]:
+        """Expand a query using the cue co-occurrence graph (async)."""
+        payload = {"query": query, "limit": limit}
+        if min_score is not None:
+            payload["min_score"] = min_score
+            
+        response = await self.client.post(
+            "/context/expand",
+            json=payload,
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to expand context: {response.text}")
+        return response.json()
+
+    async def backup_upload(self, project_id: str) -> Dict[str, Any]:
+        """Upload project snapshot to cloud backup (async)."""
+        response = await self.client.post(
+            "/backup/upload",
+            json={"project_id": project_id},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to upload backup: {response.text}")
+        return response.json()
+
+    async def backup_download(self, project_id: str) -> Dict[str, Any]:
+        """Download and load project snapshot from cloud backup (async)."""
+        response = await self.client.post(
+            "/backup/download",
+            json={"project_id": project_id},
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to download backup: {response.text}")
+        return response.json()
+
+    async def backup_list(self) -> Dict[str, Any]:
+        """List available cloud backups (async)."""
+        response = await self.client.get(
+            "/backup/list",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to list backups: {response.text}")
+        return response.json()
+        
+    async def backup_delete(self, project_id: str) -> Dict[str, Any]:
+        """Delete a cloud backup (async)."""
+        response = await self.client.delete(
+            f"/backup/{project_id}",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to delete backup: {response.text}")
+        return response.json()
 
     async def ingest_url(self, url: str) -> Dict[str, Any]:
         """Ingest content from a URL (async)."""

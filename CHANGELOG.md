@@ -2,6 +2,12 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.6.1] - 2026-01-21
+
+### Added
+- **Context Expansion**: New `context_expand` method to retrieve related concepts from the cue graph.
+- **Cloud Backup Management**: New methods (`backup_upload`, `backup_download`, `backup_list`, `backup_delete`) to manage cloud snapshots programmatically.
+
 ## [0.6.0] - 2026-01-19
 
 ### Added
