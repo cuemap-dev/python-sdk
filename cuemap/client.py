@@ -403,11 +403,26 @@ class CueMap:
 
     # --- Ingestion Methods ---
 
-    def ingest_url(self, url: str) -> Dict[str, Any]:
-        """Ingest content from a URL."""
+    def ingest_url(self, url: str, depth: int = 0, same_domain_only: bool = True) -> Dict[str, Any]:
+        """
+        Ingest content from a URL with optional recursive crawling.
+        
+        Args:
+            url: The URL to ingest
+            depth: Crawl depth (0=single page, 1+=recursive crawling)
+            same_domain_only: Only follow links within the same domain (default: True)
+            
+        Returns:
+            Dict with status, chunks/pages_crawled, memory_ids, etc.
+        """
+        payload = {"url": url}
+        if depth > 0:
+            payload["depth"] = depth
+            payload["same_domain_only"] = same_domain_only
+            
         response = self.client.post(
             "/ingest/url",
-            json={"url": url},
+            json=payload,
             headers=self._headers()
         )
         if response.status_code != 200:
@@ -791,11 +806,26 @@ class AsyncCueMap:
             raise CueMapError(f"Failed to delete backup: {response.text}")
         return response.json()
 
-    async def ingest_url(self, url: str) -> Dict[str, Any]:
-        """Ingest content from a URL (async)."""
+    async def ingest_url(self, url: str, depth: int = 0, same_domain_only: bool = True) -> Dict[str, Any]:
+        """
+        Ingest content from a URL with optional recursive crawling (async).
+        
+        Args:
+            url: The URL to ingest
+            depth: Crawl depth (0=single page, 1+=recursive crawling)
+            same_domain_only: Only follow links within the same domain (default: True)
+            
+        Returns:
+            Dict with status, chunks/pages_crawled, memory_ids, etc.
+        """
+        payload = {"url": url}
+        if depth > 0:
+            payload["depth"] = depth
+            payload["same_domain_only"] = same_domain_only
+            
         response = await self.client.post(
             "/ingest/url",
-            json={"url": url},
+            json=payload,
             headers=self._headers()
         )
         if response.status_code != 200:
