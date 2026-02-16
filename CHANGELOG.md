@@ -2,6 +2,11 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.6.3] - 2026-02-16
+
+### Added
+- **Optional alias expansion**: Added optional alias expansion to the SDK.
+
 ## [0.6.1] - 2026-01-21
 
 ### Added

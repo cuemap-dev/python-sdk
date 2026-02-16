@@ -106,7 +106,8 @@ class CueMap:
         explain: bool = False,
         disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False
+        disable_systems_consolidation: bool = False,
+        disable_alias_expansion: bool = False
     ) -> List[RecallResult]:
         """
         Recall memories by cues or natural language.
@@ -134,7 +135,8 @@ class CueMap:
             "explain": explain,
             "disable_pattern_completion": disable_pattern_completion,
             "disable_salience_bias": disable_salience_bias,
-            "disable_systems_consolidation": disable_systems_consolidation
+            "disable_systems_consolidation": disable_systems_consolidation,
+            "disable_alias_expansion": disable_alias_expansion
         }
         if cues:
             payload["cues"] = cues
@@ -170,7 +172,8 @@ class CueMap:
         projects: Optional[List[str]] = None,
         disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False
+        disable_systems_consolidation: bool = False,
+        disable_alias_expansion: bool = False
     ) -> Dict[str, Any]:
         """
         Recall grounded context with token budgeting.
@@ -189,7 +192,8 @@ class CueMap:
                 "projects": projects,
                 "disable_pattern_completion": disable_pattern_completion,
                 "disable_salience_bias": disable_salience_bias,
-                "disable_systems_consolidation": disable_systems_consolidation
+                "disable_systems_consolidation": disable_systems_consolidation,
+                "disable_alias_expansion": disable_alias_expansion
             },
             headers=self._headers()
         )
@@ -550,7 +554,8 @@ class AsyncCueMap:
         explain: bool = False,
         disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False
+        disable_systems_consolidation: bool = False,
+        disable_alias_expansion: bool = False
     ) -> List[RecallResult]:
         """Recall memories (async)."""
         payload = {
@@ -559,7 +564,8 @@ class AsyncCueMap:
             "explain": explain,
             "disable_pattern_completion": disable_pattern_completion,
             "disable_salience_bias": disable_salience_bias,
-            "disable_systems_consolidation": disable_systems_consolidation
+            "disable_systems_consolidation": disable_systems_consolidation,
+            "disable_alias_expansion": disable_alias_expansion
         }
         if cues:
             payload["cues"] = cues
@@ -595,7 +601,8 @@ class AsyncCueMap:
         projects: Optional[List[str]] = None,
         disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False
+        disable_systems_consolidation: bool = False,
+        disable_alias_expansion: bool = False
     ) -> Dict[str, Any]:
         """Recall grounded context (async)."""
         response = await self.client.post(
@@ -607,7 +614,8 @@ class AsyncCueMap:
                 "projects": projects,
                 "disable_pattern_completion": disable_pattern_completion,
                 "disable_salience_bias": disable_salience_bias,
-                "disable_systems_consolidation": disable_systems_consolidation
+                "disable_systems_consolidation": disable_systems_consolidation,
+                "disable_alias_expansion": disable_alias_expansion
             },
             headers=self._headers()
         )

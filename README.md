@@ -191,7 +191,7 @@ async with AsyncCueMap() as client:
 ## Performance
 
 - **Write Latency**: ~2ms (O(1) complexity)
-- **Read Latency**: ~5-10ms (Raw vs Smart Recall)
+- **Read Latency**: ~3ms (P99, 1M memories)
 
 ## License
 

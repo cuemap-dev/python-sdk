@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cuemap"
-version = "0.6.1"
+version = "0.6.3"
 description = "CueMap Python SDK - High-performance temporal-associative memory"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 keywords = ["ai", "memory", "agents", "temporal", "associative", "llm", "rag"]
 authors = [
-    {name = "CueMap Team", email = "hello@cuemap.dev"}
+    {name = "Kaan Demirel", email = "hello@cuemap.dev"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
