@@ -2,6 +2,11 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.6.4] - 2026-03-04
+
+### Added
+- **Multi-Hop Recall**: `depth` parameter in recall requests to enable multi-hop associative retrieval.
+
 ## [0.6.3] - 2026-02-16
 
 ### Added
