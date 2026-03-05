@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cuemap"
-version = "0.6.4"
+version = "0.6.6"
 description = "CueMap Python SDK - High-performance temporal-associative memory"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -42,8 +42,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/cuemap-dev/sdks"
-Documentation = "https://github.com/cuemap-dev/sdks/blob/main/python/README.md"
-Repository = "https://github.com/cuemap-dev/sdks"
-Issues = "https://github.com/cuemap-dev/sdks/issues"
-Engine = "https://github.com/cuemap-dev/engine"
+Homepage = "https://github.com/cuemap-dev/python-sdk"
+Documentation = "https://github.com/cuemap-dev/python-sdk/blob/main/README.md"
+Repository = "https://github.com/cuemap-dev/python-sdk"
+Issues = "https://github.com/cuemap-dev/python-sdk/issues"
+Engine = "https://github.com/cuemap-dev/cuemap"
