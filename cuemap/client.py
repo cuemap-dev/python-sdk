@@ -7,6 +7,11 @@ from .models import Memory, RecallResult
 from .exceptions import CueMapError, ConnectionError, AuthenticationError
 
 
+def _clean_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop unset values while preserving explicit false/zero values."""
+    return {key: value for key, value in payload.items() if value is not None}
+
+
 class CueMap:
     """
     Pure CueMap client.
@@ -16,7 +21,7 @@ class CueMap:
     Example:
         >>> client = CueMap()
         >>> client.add("Important note", cues=["work", "urgent"])
-        >>> results = client.recall(["work"])
+        >>> results = client.recall(cues=["work"])
     """
     
     def __init__(
@@ -56,16 +61,21 @@ class CueMap:
     def add(
         self,
         content: str,
-        cues: List[str],
+        cues: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        disable_temporal_chunking: bool = False
-    ) -> str:
+        disable_temporal_chunking: bool = False,
+        source_key: Optional[str] = None,
+        cuepacks: Optional[List[str]] = None,
+        async_ingest: bool = False,
+        minimal_response: bool = False,
+        trace_timing: bool = False,
+    ) -> Any:
         """
         Add a memory.
         
         Args:
             content: Memory content
-            cues: List of cues (tags) for retrieval
+            cues: Optional list of cues (tags) for retrieval
             metadata: Optional metadata
             
         Returns:
@@ -79,12 +89,17 @@ class CueMap:
         """
         response = self.client.post(
             "/memories",
-            json={
+            json=_clean_payload({
                 "content": content,
-                "cues": cues,
-                "metadata": metadata or {},
-                "disable_temporal_chunking": disable_temporal_chunking
-            },
+                "cues": cues or [],
+                "metadata": metadata,
+                "disable_temporal_chunking": disable_temporal_chunking,
+                "source_key": source_key,
+                "cuepacks": cuepacks,
+                "async_ingest": async_ingest,
+                "minimal_response": minimal_response,
+                "trace_timing": trace_timing,
+            }),
             headers=self._headers()
         )
         
@@ -94,21 +109,62 @@ class CueMap:
             raise CueMapError(f"Failed to add memory: {response.status_code}")
         
         return response.json()["id"]
+
+    def add_batch(
+        self,
+        memories: List[Dict[str, Any]],
+        minimal_response: bool = False,
+        trace_timing: bool = False,
+    ) -> Dict[str, Any]:
+        """Add multiple memories in one request."""
+        response = self.client.post(
+            "/memories/batch",
+            json={
+                "memories": memories,
+                "minimal_response": minimal_response,
+                "trace_timing": trace_timing,
+            },
+            headers=self._headers()
+        )
+
+        if response.status_code == 401:
+            raise AuthenticationError("Invalid API key")
+        elif response.status_code != 200:
+            raise CueMapError(f"Failed to add memories: {response.text}")
+
+        return response.json()
     
     def recall(
         self,
         query_text: Optional[str] = None,
         cues: Optional[List[str]] = None,
         projects: Optional[List[str]] = None,
+        query_time: Optional[str] = None,
         limit: int = 10,
         depth: int = 1,
         auto_reinforce: bool = False,
         min_intersection: Optional[int] = None,
         explain: bool = False,
-        disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False,
-        disable_alias_expansion: bool = False
+        disable_alias_expansion: bool = True,
+        trace_timing: bool = False,
+        expansion_depth: int = 1,
+        cuepacks: Optional[List[str]] = None,
+        parent_fusion: str = "off",
+        parent_fusion_limit: int = 80,
+        parent_fusion_min_chunks: int = 2,
+        ordered_reconstruction: str = "off",
+        ordered_reconstruction_limit: int = 80,
+        ordered_session_scan_limit: int = 4096,
+        ordered_max_sessions: int = 3,
+        evidence_coverage: str = "off",
+        evidence_coverage_limit: int = 100,
+        evidence_coverage_session_scan_limit: int = 4096,
+        evidence_coverage_max_sessions: int = 3,
+        disable_cuebridge_artifacts: bool = False,
+        cuebridge_gap_limit: int = 6,
+        disable_pattern_completion: Optional[bool] = None,
+        disable_systems_consolidation: Optional[bool] = None,
     ) -> List[RecallResult]:
         """
         Recall memories by cues or natural language.
@@ -118,6 +174,7 @@ class CueMap:
             cues: List of cues to search for
             projects: List of project IDs for cross-domain queries
             limit: Maximum results to return
+            depth: Number of multi-hop recall expansion hops
             auto_reinforce: Automatically reinforce retrieved memories
             min_intersection: Minimum number of cues that must match
             explain: Include recall explanation in results
@@ -135,23 +192,40 @@ class CueMap:
             "depth": depth,
             "auto_reinforce": auto_reinforce,
             "explain": explain,
-            "disable_pattern_completion": disable_pattern_completion,
             "disable_salience_bias": disable_salience_bias,
-            "disable_systems_consolidation": disable_systems_consolidation,
-            "disable_alias_expansion": disable_alias_expansion
+            "disable_alias_expansion": disable_alias_expansion,
+            "trace_timing": trace_timing,
+            "expansion_depth": expansion_depth,
+            "parent_fusion": parent_fusion,
+            "parent_fusion_limit": parent_fusion_limit,
+            "parent_fusion_min_chunks": parent_fusion_min_chunks,
+            "ordered_reconstruction": ordered_reconstruction,
+            "ordered_reconstruction_limit": ordered_reconstruction_limit,
+            "ordered_session_scan_limit": ordered_session_scan_limit,
+            "ordered_max_sessions": ordered_max_sessions,
+            "evidence_coverage": evidence_coverage,
+            "evidence_coverage_limit": evidence_coverage_limit,
+            "evidence_coverage_session_scan_limit": evidence_coverage_session_scan_limit,
+            "evidence_coverage_max_sessions": evidence_coverage_max_sessions,
+            "disable_cuebridge_artifacts": disable_cuebridge_artifacts,
+            "cuebridge_gap_limit": cuebridge_gap_limit,
         }
         if cues:
             payload["cues"] = cues
         if query_text:
             payload["query_text"] = query_text
+        if query_time:
+            payload["query_time"] = query_time
         if min_intersection is not None:
             payload["min_intersection"] = min_intersection
         if projects:
             payload["projects"] = projects
+        if cuepacks:
+            payload["cuepacks"] = cuepacks
 
         response = self.client.post(
             "/recall",
-            json=payload,
+            json=_clean_payload(payload),
             headers=self._headers()
         )
         
@@ -174,10 +248,12 @@ class CueMap:
         projects: Optional[List[str]] = None,
         auto_reinforce: bool = True,
         min_intersection: Optional[int] = None,
-        disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False,
-        disable_alias_expansion: bool = False
+        disable_alias_expansion: bool = True,
+        expansion_depth: int = 1,
+        cuepacks: Optional[List[str]] = None,
+        disable_pattern_completion: Optional[bool] = None,
+        disable_systems_consolidation: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Recall grounded context with token budgeting.
@@ -189,18 +265,18 @@ class CueMap:
         """
         response = self.client.post(
             "/recall/grounded",
-            json={
+            json=_clean_payload({
                 "query_text": query,
                 "token_budget": token_budget,
                 "limit": limit,
                 "projects": projects,
                 "auto_reinforce": auto_reinforce,
                 "min_intersection": min_intersection,
-                "disable_pattern_completion": disable_pattern_completion,
                 "disable_salience_bias": disable_salience_bias,
-                "disable_systems_consolidation": disable_systems_consolidation,
-                "disable_alias_expansion": disable_alias_expansion
-            },
+                "disable_alias_expansion": disable_alias_expansion,
+                "expansion_depth": expansion_depth,
+                "cuepacks": cuepacks,
+            }),
             headers=self._headers()
         )
         
@@ -219,6 +295,17 @@ class CueMap:
             raise CueMapError(f"Failed to list projects: {response.text}")
         return response.json()
 
+    def create_project(self, project_id: str) -> Dict[str, Any]:
+        """Create a project."""
+        response = self.client.post(
+            "/projects",
+            json={"project_id": project_id},
+            headers=self._headers()
+        )
+        if response.status_code not in (200, 201):
+            raise CueMapError(f"Failed to create project: {response.text}")
+        return response.json()
+
     def delete_project(self, project_id: str) -> bool:
         """Delete a project (multi-tenant only)."""
         response = self.client.delete(
@@ -226,6 +313,72 @@ class CueMap:
             headers=self._headers()
         )
         return response.status_code == 200
+
+    def project_artifacts(self, project_id: str) -> Dict[str, Any]:
+        """Get CueBridge artifact summary for a project."""
+        response = self.client.get(
+            f"/projects/{project_id}/artifacts",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get project artifacts: {response.text}")
+        return response.json()
+
+    def reload_project_artifacts(self, project_id: str) -> Dict[str, Any]:
+        """Reload CueBridge artifacts for a project."""
+        response = self.client.post(
+            f"/projects/{project_id}/artifacts",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to reload project artifacts: {response.text}")
+        return response.json()
+
+    def export_project(
+        self,
+        project_id: str,
+        cursor: Optional[int] = None,
+        limit: int = 1000,
+        include_content: bool = True,
+        include_cues: bool = True,
+        include_metadata: bool = True,
+    ) -> Dict[str, Any]:
+        """Export project memories with cursor pagination."""
+        response = self.client.get(
+            f"/projects/{project_id}/export",
+            params=_clean_payload({
+                "cursor": cursor,
+                "limit": limit,
+                "include_content": include_content,
+                "include_cues": include_cues,
+                "include_metadata": include_metadata,
+            }),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to export project: {response.text}")
+        return response.json()
+
+    def set_project_watch_dir(
+        self,
+        project_id: str,
+        watch_dir: str,
+        ignored_patterns: Optional[List[str]] = None,
+        ignored_extensions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Set the self-learning agent watch directory for a project."""
+        response = self.client.post(
+            f"/projects/{project_id}/watch-dir",
+            json=_clean_payload({
+                "watch_dir": watch_dir,
+                "ignored_patterns": ignored_patterns,
+                "ignored_extensions": ignored_extensions,
+            }),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to set project watch directory: {response.text}")
+        return response.json()
 
     def add_alias(self, from_cue: str, to_cue: str, weight: float = 1.0) -> bool:
         """Add an alias (manual cue mapping)."""
@@ -334,16 +487,6 @@ class CueMap:
             raise CueMapError(f"Failed to get lexicon graph: {response.text}")
         return response.json()
 
-    def lexicon_synonyms(self, cue: str) -> Dict[str, Any]:
-        """Get WordNet synonyms and graph suggestions for a cue."""
-        response = self.client.get(
-            f"/lexicon/synonyms/{cue}",
-            headers=self._headers()
-        )
-        if response.status_code != 200:
-            raise CueMapError(f"Failed to get synonyms: {response.text}")
-        return response.json()
-
     def lexicon_delete(self, memory_id: str) -> bool:
         """Delete a Lexicon entry."""
         response = self.client.delete(
@@ -352,22 +495,7 @@ class CueMap:
         )
         return response.status_code == 200
 
-    # --- Context & Backup Methods ---
-
-    def context_expand(self, query: str, limit: int = 20, min_score: Optional[float] = None) -> Dict[str, Any]:
-        """Expand a query using the cue co-occurrence graph."""
-        payload = {"query": query, "limit": limit}
-        if min_score is not None:
-            payload["min_score"] = min_score
-            
-        response = self.client.post(
-            "/context/expand",
-            json=payload,
-            headers=self._headers()
-        )
-        if response.status_code != 200:
-            raise CueMapError(f"Failed to expand context: {response.text}")
-        return response.json()
+    # --- Backup Methods ---
 
     def backup_upload(self, project_id: str) -> Dict[str, Any]:
         """Upload project snapshot to cloud backup."""
@@ -439,15 +567,92 @@ class CueMap:
             raise CueMapError(f"Failed to ingest URL: {response.text}")
         return response.json()
 
-    def ingest_content(self, content: str, filename: str = "content.txt") -> Dict[str, Any]:
+    def ingest_content(
+        self,
+        content: str,
+        filename: str = "content.txt",
+        source_key: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        structural_cues: Optional[List[str]] = None,
+        segmenter: str = "sentence_window",
+        segment_window_size: Optional[int] = None,
+        segment_overlap: Optional[int] = None,
+        segment_min_chunk_chars: Optional[int] = None,
+        segment_max_chunk_chars: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """Ingest raw content."""
         response = self.client.post(
             "/ingest/content",
-            json={"content": content, "filename": filename},
+            json=_clean_payload({
+                "content": content,
+                "filename": filename,
+                "source_key": source_key,
+                "metadata": metadata,
+                "structural_cues": structural_cues,
+                "segmenter": segmenter,
+                "segment_window_size": segment_window_size,
+                "segment_overlap": segment_overlap,
+                "segment_min_chunk_chars": segment_min_chunk_chars,
+                "segment_max_chunk_chars": segment_max_chunk_chars,
+            }),
             headers=self._headers()
         )
         if response.status_code != 200:
             raise CueMapError(f"Failed to ingest content: {response.text}")
+        return response.json()
+
+    def recall_web(
+        self,
+        query: str,
+        url: Optional[str] = None,
+        persist: bool = False,
+    ) -> Dict[str, Any]:
+        """Recall directly from a URL or web search result set."""
+        response = self.client.post(
+            "/recall/web",
+            json=_clean_payload({"query": query, "url": url, "persist": persist}),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to recall web context: {response.text}")
+        return response.json()
+
+    def debug_analyze_text(
+        self,
+        text: str,
+        query_time: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        existing_cues: Optional[List[str]] = None,
+        available_cues: Optional[List[str]] = None,
+        cuepacks: Optional[List[str]] = None,
+        filename: Optional[str] = None,
+        segmenter: str = "sentence_window",
+        segment_window_size: Optional[int] = None,
+        segment_overlap: Optional[int] = None,
+        segment_min_chunk_chars: Optional[int] = None,
+        segment_max_chunk_chars: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Analyze v0.7 cue extraction, query intent, and chunking for text."""
+        response = self.client.post(
+            "/debug/analyze-text",
+            json=_clean_payload({
+                "text": text,
+                "query_time": query_time,
+                "metadata": metadata,
+                "existing_cues": existing_cues,
+                "available_cues": available_cues,
+                "cuepacks": cuepacks,
+                "filename": filename,
+                "segmenter": segmenter,
+                "segment_window_size": segment_window_size,
+                "segment_overlap": segment_overlap,
+                "segment_min_chunk_chars": segment_min_chunk_chars,
+                "segment_max_chunk_chars": segment_max_chunk_chars,
+            }),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to analyze text: {response.text}")
         return response.json()
 
     def ingest_file(self, file_path: str) -> Dict[str, Any]:
@@ -527,18 +732,29 @@ class AsyncCueMap:
     async def add(
         self,
         content: str,
-        cues: List[str],
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+        cues: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        disable_temporal_chunking: bool = False,
+        source_key: Optional[str] = None,
+        cuepacks: Optional[List[str]] = None,
+        async_ingest: bool = False,
+        minimal_response: bool = False,
+        trace_timing: bool = False,
+    ) -> Any:
         """Add a memory (async)."""
         response = await self.client.post(
             "/memories",
-            json={
+            json=_clean_payload({
                 "content": content,
-                "cues": cues,
-                "metadata": metadata or {},
-                "disable_temporal_chunking": disable_temporal_chunking
-            },
+                "cues": cues or [],
+                "metadata": metadata,
+                "disable_temporal_chunking": disable_temporal_chunking,
+                "source_key": source_key,
+                "cuepacks": cuepacks,
+                "async_ingest": async_ingest,
+                "minimal_response": minimal_response,
+                "trace_timing": trace_timing,
+            }),
             headers=self._headers()
         )
         
@@ -548,21 +764,62 @@ class AsyncCueMap:
             raise CueMapError(f"Failed to add memory: {response.status_code}")
         
         return response.json()["id"]
+
+    async def add_batch(
+        self,
+        memories: List[Dict[str, Any]],
+        minimal_response: bool = False,
+        trace_timing: bool = False,
+    ) -> Dict[str, Any]:
+        """Add multiple memories in one request (async)."""
+        response = await self.client.post(
+            "/memories/batch",
+            json={
+                "memories": memories,
+                "minimal_response": minimal_response,
+                "trace_timing": trace_timing,
+            },
+            headers=self._headers()
+        )
+
+        if response.status_code == 401:
+            raise AuthenticationError("Invalid API key")
+        elif response.status_code != 200:
+            raise CueMapError(f"Failed to add memories: {response.text}")
+
+        return response.json()
     
     async def recall(
         self,
         query_text: Optional[str] = None,
         cues: Optional[List[str]] = None,
         projects: Optional[List[str]] = None,
+        query_time: Optional[str] = None,
         limit: int = 10,
         depth: int = 1,
         auto_reinforce: bool = False,
         min_intersection: Optional[int] = None,
         explain: bool = False,
-        disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False,
-        disable_alias_expansion: bool = False
+        disable_alias_expansion: bool = True,
+        trace_timing: bool = False,
+        expansion_depth: int = 1,
+        cuepacks: Optional[List[str]] = None,
+        parent_fusion: str = "off",
+        parent_fusion_limit: int = 80,
+        parent_fusion_min_chunks: int = 2,
+        ordered_reconstruction: str = "off",
+        ordered_reconstruction_limit: int = 80,
+        ordered_session_scan_limit: int = 4096,
+        ordered_max_sessions: int = 3,
+        evidence_coverage: str = "off",
+        evidence_coverage_limit: int = 100,
+        evidence_coverage_session_scan_limit: int = 4096,
+        evidence_coverage_max_sessions: int = 3,
+        disable_cuebridge_artifacts: bool = False,
+        cuebridge_gap_limit: int = 6,
+        disable_pattern_completion: Optional[bool] = None,
+        disable_systems_consolidation: Optional[bool] = None,
     ) -> List[RecallResult]:
         """Recall memories (async)."""
         payload = {
@@ -570,23 +827,40 @@ class AsyncCueMap:
             "depth": depth,
             "auto_reinforce": auto_reinforce,
             "explain": explain,
-            "disable_pattern_completion": disable_pattern_completion,
             "disable_salience_bias": disable_salience_bias,
-            "disable_systems_consolidation": disable_systems_consolidation,
-            "disable_alias_expansion": disable_alias_expansion
+            "disable_alias_expansion": disable_alias_expansion,
+            "trace_timing": trace_timing,
+            "expansion_depth": expansion_depth,
+            "parent_fusion": parent_fusion,
+            "parent_fusion_limit": parent_fusion_limit,
+            "parent_fusion_min_chunks": parent_fusion_min_chunks,
+            "ordered_reconstruction": ordered_reconstruction,
+            "ordered_reconstruction_limit": ordered_reconstruction_limit,
+            "ordered_session_scan_limit": ordered_session_scan_limit,
+            "ordered_max_sessions": ordered_max_sessions,
+            "evidence_coverage": evidence_coverage,
+            "evidence_coverage_limit": evidence_coverage_limit,
+            "evidence_coverage_session_scan_limit": evidence_coverage_session_scan_limit,
+            "evidence_coverage_max_sessions": evidence_coverage_max_sessions,
+            "disable_cuebridge_artifacts": disable_cuebridge_artifacts,
+            "cuebridge_gap_limit": cuebridge_gap_limit,
         }
         if cues:
             payload["cues"] = cues
         if query_text:
             payload["query_text"] = query_text
+        if query_time:
+            payload["query_time"] = query_time
         if min_intersection is not None:
             payload["min_intersection"] = min_intersection
         if projects:
             payload["projects"] = projects
+        if cuepacks:
+            payload["cuepacks"] = cuepacks
 
         response = await self.client.post(
             "/recall",
-            json=payload,
+            json=_clean_payload(payload),
             headers=self._headers()
         )
         
@@ -609,26 +883,28 @@ class AsyncCueMap:
         projects: Optional[List[str]] = None,
         auto_reinforce: bool = True,
         min_intersection: Optional[int] = None,
-        disable_pattern_completion: bool = False,
         disable_salience_bias: bool = False,
-        disable_systems_consolidation: bool = False,
-        disable_alias_expansion: bool = False
+        disable_alias_expansion: bool = True,
+        expansion_depth: int = 1,
+        cuepacks: Optional[List[str]] = None,
+        disable_pattern_completion: Optional[bool] = None,
+        disable_systems_consolidation: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Recall grounded context (async)."""
         response = await self.client.post(
             "/recall/grounded",
-            json={
+            json=_clean_payload({
                 "query_text": query,
                 "token_budget": token_budget,
                 "limit": limit,
                 "projects": projects,
                 "auto_reinforce": auto_reinforce,
                 "min_intersection": min_intersection,
-                "disable_pattern_completion": disable_pattern_completion,
                 "disable_salience_bias": disable_salience_bias,
-                "disable_systems_consolidation": disable_systems_consolidation,
-                "disable_alias_expansion": disable_alias_expansion
-            },
+                "disable_alias_expansion": disable_alias_expansion,
+                "expansion_depth": expansion_depth,
+                "cuepacks": cuepacks,
+            }),
             headers=self._headers()
         )
         
@@ -647,6 +923,17 @@ class AsyncCueMap:
             raise CueMapError(f"Failed to list projects: {response.text}")
         return response.json()
 
+    async def create_project(self, project_id: str) -> Dict[str, Any]:
+        """Create a project (async)."""
+        response = await self.client.post(
+            "/projects",
+            json={"project_id": project_id},
+            headers=self._headers()
+        )
+        if response.status_code not in (200, 201):
+            raise CueMapError(f"Failed to create project: {response.text}")
+        return response.json()
+
     async def delete_project(self, project_id: str) -> bool:
         """Delete a project (async, multi-tenant only)."""
         response = await self.client.delete(
@@ -654,6 +941,72 @@ class AsyncCueMap:
             headers=self._headers()
         )
         return response.status_code == 200
+
+    async def project_artifacts(self, project_id: str) -> Dict[str, Any]:
+        """Get CueBridge artifact summary for a project (async)."""
+        response = await self.client.get(
+            f"/projects/{project_id}/artifacts",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get project artifacts: {response.text}")
+        return response.json()
+
+    async def reload_project_artifacts(self, project_id: str) -> Dict[str, Any]:
+        """Reload CueBridge artifacts for a project (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/artifacts",
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to reload project artifacts: {response.text}")
+        return response.json()
+
+    async def export_project(
+        self,
+        project_id: str,
+        cursor: Optional[int] = None,
+        limit: int = 1000,
+        include_content: bool = True,
+        include_cues: bool = True,
+        include_metadata: bool = True,
+    ) -> Dict[str, Any]:
+        """Export project memories with cursor pagination (async)."""
+        response = await self.client.get(
+            f"/projects/{project_id}/export",
+            params=_clean_payload({
+                "cursor": cursor,
+                "limit": limit,
+                "include_content": include_content,
+                "include_cues": include_cues,
+                "include_metadata": include_metadata,
+            }),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to export project: {response.text}")
+        return response.json()
+
+    async def set_project_watch_dir(
+        self,
+        project_id: str,
+        watch_dir: str,
+        ignored_patterns: Optional[List[str]] = None,
+        ignored_extensions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Set the self-learning agent watch directory for a project (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/watch-dir",
+            json=_clean_payload({
+                "watch_dir": watch_dir,
+                "ignored_patterns": ignored_patterns,
+                "ignored_extensions": ignored_extensions,
+            }),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to set project watch directory: {response.text}")
+        return response.json()
 
     async def add_alias(self, from_cue: str, to_cue: str, weight: float = 1.0) -> bool:
         """Add an alias (async)."""
@@ -751,16 +1104,6 @@ class AsyncCueMap:
             raise CueMapError(f"Failed to get lexicon graph: {response.text}")
         return response.json()
 
-    async def lexicon_synonyms(self, cue: str) -> Dict[str, Any]:
-        """Get WordNet synonyms and graph suggestions for a cue (async)."""
-        response = await self.client.get(
-            f"/lexicon/synonyms/{cue}",
-            headers=self._headers()
-        )
-        if response.status_code != 200:
-            raise CueMapError(f"Failed to get synonyms: {response.text}")
-        return response.json()
-
     async def lexicon_delete(self, memory_id: str) -> bool:
         """Delete a Lexicon entry (async)."""
         response = await self.client.delete(
@@ -768,21 +1111,6 @@ class AsyncCueMap:
             headers=self._headers()
         )
         return response.status_code == 200
-
-    async def context_expand(self, query: str, limit: int = 20, min_score: Optional[float] = None) -> Dict[str, Any]:
-        """Expand a query using the cue co-occurrence graph (async)."""
-        payload = {"query": query, "limit": limit}
-        if min_score is not None:
-            payload["min_score"] = min_score
-            
-        response = await self.client.post(
-            "/context/expand",
-            json=payload,
-            headers=self._headers()
-        )
-        if response.status_code != 200:
-            raise CueMapError(f"Failed to expand context: {response.text}")
-        return response.json()
 
     async def backup_upload(self, project_id: str) -> Dict[str, Any]:
         """Upload project snapshot to cloud backup (async)."""
@@ -852,15 +1180,92 @@ class AsyncCueMap:
             raise CueMapError(f"Failed to ingest URL: {response.text}")
         return response.json()
 
-    async def ingest_content(self, content: str, filename: str = "content.txt") -> Dict[str, Any]:
+    async def ingest_content(
+        self,
+        content: str,
+        filename: str = "content.txt",
+        source_key: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        structural_cues: Optional[List[str]] = None,
+        segmenter: str = "sentence_window",
+        segment_window_size: Optional[int] = None,
+        segment_overlap: Optional[int] = None,
+        segment_min_chunk_chars: Optional[int] = None,
+        segment_max_chunk_chars: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """Ingest raw content (async)."""
         response = await self.client.post(
             "/ingest/content",
-            json={"content": content, "filename": filename},
+            json=_clean_payload({
+                "content": content,
+                "filename": filename,
+                "source_key": source_key,
+                "metadata": metadata,
+                "structural_cues": structural_cues,
+                "segmenter": segmenter,
+                "segment_window_size": segment_window_size,
+                "segment_overlap": segment_overlap,
+                "segment_min_chunk_chars": segment_min_chunk_chars,
+                "segment_max_chunk_chars": segment_max_chunk_chars,
+            }),
             headers=self._headers()
         )
         if response.status_code != 200:
             raise CueMapError(f"Failed to ingest content: {response.text}")
+        return response.json()
+
+    async def recall_web(
+        self,
+        query: str,
+        url: Optional[str] = None,
+        persist: bool = False,
+    ) -> Dict[str, Any]:
+        """Recall directly from a URL or web search result set (async)."""
+        response = await self.client.post(
+            "/recall/web",
+            json=_clean_payload({"query": query, "url": url, "persist": persist}),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to recall web context: {response.text}")
+        return response.json()
+
+    async def debug_analyze_text(
+        self,
+        text: str,
+        query_time: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        existing_cues: Optional[List[str]] = None,
+        available_cues: Optional[List[str]] = None,
+        cuepacks: Optional[List[str]] = None,
+        filename: Optional[str] = None,
+        segmenter: str = "sentence_window",
+        segment_window_size: Optional[int] = None,
+        segment_overlap: Optional[int] = None,
+        segment_min_chunk_chars: Optional[int] = None,
+        segment_max_chunk_chars: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Analyze v0.7 cue extraction, query intent, and chunking for text (async)."""
+        response = await self.client.post(
+            "/debug/analyze-text",
+            json=_clean_payload({
+                "text": text,
+                "query_time": query_time,
+                "metadata": metadata,
+                "existing_cues": existing_cues,
+                "available_cues": available_cues,
+                "cuepacks": cuepacks,
+                "filename": filename,
+                "segmenter": segmenter,
+                "segment_window_size": segment_window_size,
+                "segment_overlap": segment_overlap,
+                "segment_min_chunk_chars": segment_min_chunk_chars,
+                "segment_max_chunk_chars": segment_max_chunk_chars,
+            }),
+            headers=self._headers()
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to analyze text: {response.text}")
         return response.json()
 
     async def ingest_file(self, file_path: str) -> Dict[str, Any]:

@@ -2,6 +2,23 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.7.0] - 2026-07-06
+
+### Added
+- **v0.7 Recall Controls**: Added `query_time`, `trace_timing`, `expansion_depth`, `cuepacks`, parent fusion, ordered reconstruction, evidence coverage, and CueBridge artifact controls.
+- **v0.7 Ingestion Controls**: Added `source_key`, `structural_cues`, and segmenter configuration for raw content ingestion.
+- **Batch Add API**: Added `add_batch()` and `AsyncCueMap.add_batch()` for `/memories/batch`.
+- **Project Artifact APIs**: Added helpers for project artifact summary/reload, project export, and watch directory configuration.
+- **Debug Analysis API**: Added `debug_analyze_text()` for v0.7 cue extraction and chunking inspection.
+
+### Changed
+- **Memory IDs**: SDK models now accept numeric v0.7 memory IDs.
+- **Alias Expansion Default**: `disable_alias_expansion` now defaults to `True`, matching the Rust engine default.
+- **Removed Stale Endpoints**: Removed `context_expand()` and `lexicon_synonyms()` because the v0.7 Rust engine no longer exposes those routes.
+
+### Fixed
+- Fixed `AsyncCueMap.add()` referencing `disable_temporal_chunking` without accepting it as a parameter.
+
 ## [0.6.4] - 2026-03-04
 
 ### Added
@@ -75,4 +92,4 @@ All notable changes to the CueMap Python SDK will be documented in this file.
 - Basic memory ingestion and search methods.
 
 ---
-*Note: This version is designed to work with CueMap Rust Engine v0.6.x.*
+*Note: Version 0.7.0 is designed to work with CueMap Rust Engine v0.7.x.*

@@ -1,16 +1,22 @@
 # CueMap Python SDK
 
-**High-performance temporal-associative memory store** that mimics the brain's recall mechanism.
+**High-performance temporal-associative memory store** designed for dynamic contextual retrieval.
 
 ## Overview
 
-CueMap implements a **Continuous Gradient Algorithm** inspired by biological memory:
+CueMap implements a **Continuous Gradient Algorithm** optimized for associative data structures:
 
 1.  **Intersection (Context Filter)**: Triangulates relevant memories by overlapping cues
-2.  **Pattern Completion (Associative Recall)**: Automatically infers missing cues from co-occurrence history, enabling recall from partial inputs.
-3.  **Recency & Salience (Signal Dynamics)**: Balances fresh data with salient, high-signal events prioritized by the Amygdala-inspired salience module.
-4.  **Reinforcement (Hebbian Learning)**: Frequently accessed memories gain signal strength, staying "front of mind".
-5.  **Autonomous Consolidation**: Periodically merges overlapping memories into summaries, mimicking systems consolidation.
+2.  **CuePack-Guided Intent Routing**: Uses compiled deterministic rules to add structural facets and weighted intent cues without runtime model calls.
+3.  **Recency & Salience (Signal Dynamics)**: Balances fresh data with salient, high-signal events prioritized by an adaptive impact scoring module.
+4.  **Reinforcement (Access-based Learning)**: Frequently accessed memories gain signal strength, remaining highly accessible even as they age.
+5.  **Deterministic Facets & Intent Routing**: Extracts synchronous source, evidence, temporal, type, and entity facets, then uses sparse intent cues and reranking during recall.
+
+As of v0.7.0, CueMap's core path is deterministic and embedding-free. GloVe/Ollama cue generation, WordNet/POS expansion, semantic bridges, pattern completion, external lexicon graphs, context expansion/speculation endpoints, and autonomous consolidation have been removed from the core engine.
+
+v0.7.0 also uses numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
+
+Use this SDK to talk to the Rust engine from Python applications.
 
 ## Installation
 
@@ -33,10 +39,10 @@ from cuemap import CueMap
 
 client = CueMap()
 
-# Add a memory (auto-cue generation by default using internal Semantic Engine)
+# Add a memory with deterministic cue extraction
 client.add("The server password is abc123")
 
-# Recall by natural language (resolves via Lexicon)
+# Recall by natural language
 results = client.recall("server credentials")
 print(results[0].content)
 # Output: "The server password is abc123"
@@ -53,14 +59,14 @@ client.add(
     cues=["meeting", "john", "calendar"]
 )
 
-# Auto-cues (Semantic Engine)
+# Deterministic cues are derived when cues are omitted
 client.add("The payments service is down due to a timeout")
 ```
 
 ### Recall Memories
 
 ```python
-# Natural Language Search (Brain-Inspired)
+# Natural language search
 results = client.recall(
     "payments failure",
     limit=10,
@@ -68,7 +74,7 @@ results = client.recall(
 )
 
 print(results[0].explain)
-# Shows normalized cues, expanded synonyms, etc.
+# Shows normalized cues, intent cues, and reranking details.
 
 # Explicit Cue Search
 results = client.recall(
@@ -93,19 +99,20 @@ print(response["proof"])
 # Cryptographic proof of context retrieval
 ```
 
-### Context Expansion (v0.6.1)
+### v0.7 Recall Controls
 
-Explore related concepts from the cue graph to expand a user's query.
+CueMap v0.7 adds temporal query intent, CueBridge artifact expansion, and optional reconstruction passes for longer conversational/codebase context.
 
 ```python
-response = client.context_expand("server hung 137", limit=5)
-# {
-#   "query_cues": ["server", "hung", "137"],
-#   "expansions": [
-#     { "term": "out_of_memory", "score": 25.0, "co_occurrence_count": 12 },
-#     { "term": "SIGKILL", "score": 22.0, "co_occurrence_count": 8 }
-#   ]
-# }
+results = client.recall(
+    "what did we decide about auth retries?",
+    query_time="2026-07-06",
+    ordered_reconstruction="auto",
+    evidence_coverage="auto",
+    parent_fusion="auto",
+    cuepacks=["default"],
+    explain=True,
+)
 ```
 
 ### Cloud Backup (v0.6.1)
@@ -134,8 +141,14 @@ client.ingest_url("https://example.com/docs")
 # Ingest File (PDF, DOCX, etc.)
 client.ingest_file("/path/to/document.pdf")
 
-# Ingest Raw Content
-client.ingest_content("Raw text content...", filename="notes.txt")
+# Ingest Raw Content with v0.7 logical-block chunking
+client.ingest_content(
+    "Raw text content...",
+    filename="notes.md",
+    source_key="docs:notes",
+    structural_cues=["source_type:docs"],
+    segmenter="logical_block",
+)
 ```
 
 ### Lexicon Management (v0.6+)
@@ -151,8 +164,6 @@ print(f"Triggers: {data['incoming']}")
 # Manually wire a token to a concept
 client.lexicon_wire("stripe", "service:payment")
 
-# Get synonyms via WordNet
-synonyms = client.lexicon_synonyms("payment")
 ```
 
 ### Job Status (v0.6+)
@@ -171,10 +182,9 @@ Disable specific brain modules for deterministic debugging.
 ```python
 results = client.recall(
     "urgent issue",
-    disable_pattern_completion=True,    # No associative inference
-    disable_salience_bias=True,         # No emotional weighting
-    disable_systems_consolidation=True, # No gist summaries
-    disable_temporal_chunking=True      # No episodic grouping
+    disable_salience_bias=True,
+    disable_alias_expansion=True,
+    disable_cuebridge_artifacts=True,
 )
 ```
 
@@ -185,7 +195,7 @@ from cuemap import AsyncCueMap
 
 async with AsyncCueMap() as client:
     await client.add("Note")
-    await client.recall(["note"])
+    await client.recall(cues=["note"])
 ```
 
 ## Performance
