@@ -2,6 +2,11 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.7.1] - 2026-07-17
+
+### Changed
+- Synchronized the SDK patch release with CueMap Engine v0.7.1.
+
 ## [0.7.0] - 2026-07-06
 
 ### Added
