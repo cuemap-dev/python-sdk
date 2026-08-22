@@ -24,12 +24,25 @@ with tempfile.TemporaryDirectory(prefix="cuemap-python-pack-") as temporary:
     environment = Path(temporary) / "venv"
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    wheel = next(output.glob("cuemap-0.7.2-*.whl"))
+    wheels = sorted(output.glob("cuemap-*.whl"))
+    if len(wheels) != 1:
+        raise RuntimeError(f"expected exactly one CueMap wheel, found {len(wheels)}")
+    wheel = wheels[0]
     run(str(python), "-m", "pip", "install", "--no-deps", str(wheel), cwd=Path(temporary))
     run(
         str(python),
         "-c",
-        "import cuemap; from cuemap import AsyncCueMap, CueMap, EmbeddedCueMap; assert cuemap.__version__ == '0.7.2'",
+        """
+import importlib.metadata
+import cuemap
+from cuemap import AsyncCueMap, CueMap, EmbeddedCueMap
+
+package_version = importlib.metadata.version("cuemap")
+assert cuemap.__version__ == package_version, (
+    f"version mismatch: package={cuemap.__version__}, distribution={package_version}"
+)
+print(f"verified installed version {package_version}")
+""",
         cwd=Path(temporary),
     )
 
