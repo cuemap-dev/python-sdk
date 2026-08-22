@@ -7,14 +7,14 @@
 CueMap implements a **Continuous Gradient Algorithm** optimized for associative data structures:
 
 1.  **Intersection (Context Filter)**: Triangulates relevant memories by overlapping cues
-2.  **CuePack-Guided Intent Routing**: Uses compiled deterministic rules to add structural facets and weighted intent cues without runtime model calls.
+2.  **Local semantic reranking**: Uses bundled qint8 MiniLM-L3 by default, or q4 MiniLM-L3 with the edge profile, for bounded semantic ranking inside the engine.
 3.  **Recency & Salience (Signal Dynamics)**: Balances fresh data with salient, high-signal events prioritized by an adaptive impact scoring module.
 4.  **Reinforcement (Access-based Learning)**: Frequently accessed memories gain signal strength, remaining highly accessible even as they age.
 5.  **Deterministic Facets & Intent Routing**: Extracts synchronous source, evidence, temporal, type, and entity facets, then uses sparse intent cues and reranking during recall.
 
-As of v0.7.0, CueMap's core path is deterministic and embedding-free. GloVe/Ollama cue generation, WordNet/POS expansion, semantic bridges, pattern completion, external lexicon graphs, context expansion/speculation endpoints, and autonomous consolidation have been removed from the core engine.
+As of v0.7.2, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `all-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
 
-v0.7.0 also uses numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
+v0.7.2 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
 
 Use this SDK to talk to the Rust engine from Python applications.
 
@@ -99,9 +99,9 @@ print(response["proof"])
 # Cryptographic proof of context retrieval
 ```
 
-### v0.7 Recall Controls
+### v0.7.2 Recall Controls
 
-CueMap v0.7 adds temporal query intent, CueBridge artifact expansion, and optional reconstruction passes for longer conversational/codebase context.
+CueMap v0.7.2 adds local semantic query signals alongside temporal query intent and optional reconstruction passes for longer conversational/codebase context.
 
 ```python
 results = client.recall(
@@ -110,9 +110,21 @@ results = client.recall(
     ordered_reconstruction="auto",
     evidence_coverage="auto",
     parent_fusion="auto",
-    cuepacks=["default"],
+    semantic_mode="hybrid",
     explain=True,
 )
+```
+
+Use `semantic_mode="lexical"` for a semantic-reranker-disabled comparison, `"semantic"` for vector candidate discovery, or `"hybrid"` (the engine default) to rerank lexical candidates. `query_embedding` supplies a precomputed vector when the application owns the embedding provider.
+
+Classify query or memory intent with the same local engine model. Returned scores are ranking signals, not calibrated probabilities:
+
+```python
+classification = client.classify_intent(
+    "What did we decide about auth retries?",
+    target="query",
+)
+print(classification["primary_intent"], classification["recall_eligible"])
 ```
 
 ### Cloud Backup (v0.6.1)
@@ -151,6 +163,20 @@ client.ingest_content(
 )
 ```
 
+When an application chunks content itself, pass exactly one vector per produced chunk with `embeddings=[[...], [...]]`.
+
+Preview and persist a repository ingestion scope:
+
+```python
+preview = client.preview_directory("/work/my-app", included_paths=["src"])
+client.set_project_watch_dir(
+    "repo-my-app",
+    "/work/my-app",
+    included_paths=["src", "README.md"],
+)
+scope = client.get_project_watch_dir("repo-my-app")
+```
+
 ### Lexicon Management (v0.6+)
 
 Inspect and wire the brain's associations manually.
@@ -173,19 +199,7 @@ Check the progress of background ingestion tasks.
 ```python
 status = client.jobs_status()
 print(f"Ingested: {status['writes_completed']} / {status['writes_total']}")
-```
-
-### Advanced Brain Control
-
-Disable specific brain modules for deterministic debugging.
-
-```python
-results = client.recall(
-    "urgent issue",
-    disable_salience_bias=True,
-    disable_alias_expansion=True,
-    disable_cuebridge_artifacts=True,
-)
+print(f"Intent ready: {status.get('intent_ready', False)}")
 ```
 
 ## Async Support
@@ -197,11 +211,6 @@ async with AsyncCueMap() as client:
     await client.add("Note")
     await client.recall(cues=["note"])
 ```
-
-## Performance
-
-- **Write Latency**: ~2ms (O(1) complexity)
-- **Read Latency**: ~3ms (P99, 1M memories)
 
 ## License
 

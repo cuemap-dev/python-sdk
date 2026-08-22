@@ -16,7 +16,8 @@ class CueMap:
     """
     Pure CueMap client.
     
-    No auto-cue extraction. No semantic matching. Just fast memory storage.
+    The engine performs deterministic cue extraction and can use its bundled
+    local MiniLM encoder for semantic retrieval when configured.
     
     Example:
         >>> client = CueMap()
@@ -65,7 +66,8 @@ class CueMap:
         metadata: Optional[Dict[str, Any]] = None,
         disable_temporal_chunking: bool = False,
         source_key: Optional[str] = None,
-        cuepacks: Optional[List[str]] = None,
+        event_time: Optional[float] = None,
+        embedding: Optional[List[float]] = None,
         async_ingest: bool = False,
         minimal_response: bool = False,
         trace_timing: bool = False,
@@ -77,6 +79,7 @@ class CueMap:
             content: Memory content
             cues: Optional list of cues (tags) for retrieval
             metadata: Optional metadata
+            event_time: Original event timestamp as Unix seconds. Defaults to ingestion time.
             
         Returns:
             Memory ID
@@ -95,7 +98,8 @@ class CueMap:
                 "metadata": metadata,
                 "disable_temporal_chunking": disable_temporal_chunking,
                 "source_key": source_key,
-                "cuepacks": cuepacks,
+                "event_time": event_time,
+                "embedding": embedding,
                 "async_ingest": async_ingest,
                 "minimal_response": minimal_response,
                 "trace_timing": trace_timing,
@@ -133,6 +137,21 @@ class CueMap:
             raise CueMapError(f"Failed to add memories: {response.text}")
 
         return response.json()
+
+    def classify_intent(
+        self,
+        text: str,
+        target: str = "query",
+    ) -> Dict[str, Any]:
+        """Classify query or memory intent with the engine's local model."""
+        response = self.client.post(
+            "/intent/classify",
+            json={"text": text, "target": target},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to classify intent: {response.text}")
+        return response.json()
     
     def recall(
         self,
@@ -149,7 +168,6 @@ class CueMap:
         disable_alias_expansion: bool = True,
         trace_timing: bool = False,
         expansion_depth: int = 1,
-        cuepacks: Optional[List[str]] = None,
         parent_fusion: str = "off",
         parent_fusion_limit: int = 80,
         parent_fusion_min_chunks: int = 2,
@@ -165,6 +183,8 @@ class CueMap:
         cuebridge_gap_limit: int = 6,
         disable_pattern_completion: Optional[bool] = None,
         disable_systems_consolidation: Optional[bool] = None,
+        semantic_mode: str = "hybrid",
+        query_embedding: Optional[List[float]] = None,
     ) -> List[RecallResult]:
         """
         Recall memories by cues or natural language.
@@ -209,6 +229,8 @@ class CueMap:
             "evidence_coverage_max_sessions": evidence_coverage_max_sessions,
             "disable_cuebridge_artifacts": disable_cuebridge_artifacts,
             "cuebridge_gap_limit": cuebridge_gap_limit,
+            "semantic_mode": semantic_mode,
+            "query_embedding": query_embedding,
         }
         if cues:
             payload["cues"] = cues
@@ -220,9 +242,6 @@ class CueMap:
             payload["min_intersection"] = min_intersection
         if projects:
             payload["projects"] = projects
-        if cuepacks:
-            payload["cuepacks"] = cuepacks
-
         response = self.client.post(
             "/recall",
             json=_clean_payload(payload),
@@ -251,7 +270,6 @@ class CueMap:
         disable_salience_bias: bool = False,
         disable_alias_expansion: bool = True,
         expansion_depth: int = 1,
-        cuepacks: Optional[List[str]] = None,
         disable_pattern_completion: Optional[bool] = None,
         disable_systems_consolidation: Optional[bool] = None,
     ) -> Dict[str, Any]:
@@ -275,7 +293,6 @@ class CueMap:
                 "disable_salience_bias": disable_salience_bias,
                 "disable_alias_expansion": disable_alias_expansion,
                 "expansion_depth": expansion_depth,
-                "cuepacks": cuepacks,
             }),
             headers=self._headers()
         )
@@ -365,12 +382,14 @@ class CueMap:
         watch_dir: str,
         ignored_patterns: Optional[List[str]] = None,
         ignored_extensions: Optional[List[str]] = None,
+        included_paths: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Set the self-learning agent watch directory for a project."""
         response = self.client.post(
             f"/projects/{project_id}/watch-dir",
             json=_clean_payload({
                 "watch_dir": watch_dir,
+                "included_paths": included_paths,
                 "ignored_patterns": ignored_patterns,
                 "ignored_extensions": ignored_extensions,
             }),
@@ -378,6 +397,38 @@ class CueMap:
         )
         if response.status_code != 200:
             raise CueMapError(f"Failed to set project watch directory: {response.text}")
+        return response.json()
+
+    def get_project_watch_dir(self, project_id: str) -> Dict[str, Any]:
+        """Read a project's persisted repository ingestion scope."""
+        response = self.client.get(
+            f"/projects/{project_id}/watch-dir",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get project watch directory: {response.text}")
+        return response.json()
+
+    def preview_directory(
+        self,
+        watch_dir: str,
+        included_paths: Optional[List[str]] = None,
+        ignored_patterns: Optional[List[str]] = None,
+        ignored_extensions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Preview supported repository files without ingesting content."""
+        response = self.client.post(
+            "/ingest/directory/preview",
+            json=_clean_payload({
+                "watch_dir": watch_dir,
+                "included_paths": included_paths,
+                "ignored_patterns": ignored_patterns,
+                "ignored_extensions": ignored_extensions,
+            }),
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to preview directory: {response.text}")
         return response.json()
 
     def add_alias(self, from_cue: str, to_cue: str, weight: float = 1.0) -> bool:
@@ -574,6 +625,7 @@ class CueMap:
         source_key: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         structural_cues: Optional[List[str]] = None,
+        embeddings: Optional[List[List[float]]] = None,
         segmenter: str = "sentence_window",
         segment_window_size: Optional[int] = None,
         segment_overlap: Optional[int] = None,
@@ -589,6 +641,7 @@ class CueMap:
                 "source_key": source_key,
                 "metadata": metadata,
                 "structural_cues": structural_cues,
+                "embeddings": embeddings,
                 "segmenter": segmenter,
                 "segment_window_size": segment_window_size,
                 "segment_overlap": segment_overlap,
@@ -624,7 +677,6 @@ class CueMap:
         metadata: Optional[Dict[str, Any]] = None,
         existing_cues: Optional[List[str]] = None,
         available_cues: Optional[List[str]] = None,
-        cuepacks: Optional[List[str]] = None,
         filename: Optional[str] = None,
         segmenter: str = "sentence_window",
         segment_window_size: Optional[int] = None,
@@ -641,7 +693,6 @@ class CueMap:
                 "metadata": metadata,
                 "existing_cues": existing_cues,
                 "available_cues": available_cues,
-                "cuepacks": cuepacks,
                 "filename": filename,
                 "segmenter": segmenter,
                 "segment_window_size": segment_window_size,
@@ -736,7 +787,8 @@ class AsyncCueMap:
         metadata: Optional[Dict[str, Any]] = None,
         disable_temporal_chunking: bool = False,
         source_key: Optional[str] = None,
-        cuepacks: Optional[List[str]] = None,
+        event_time: Optional[float] = None,
+        embedding: Optional[List[float]] = None,
         async_ingest: bool = False,
         minimal_response: bool = False,
         trace_timing: bool = False,
@@ -750,7 +802,8 @@ class AsyncCueMap:
                 "metadata": metadata,
                 "disable_temporal_chunking": disable_temporal_chunking,
                 "source_key": source_key,
-                "cuepacks": cuepacks,
+                "event_time": event_time,
+                "embedding": embedding,
                 "async_ingest": async_ingest,
                 "minimal_response": minimal_response,
                 "trace_timing": trace_timing,
@@ -788,6 +841,21 @@ class AsyncCueMap:
             raise CueMapError(f"Failed to add memories: {response.text}")
 
         return response.json()
+
+    async def classify_intent(
+        self,
+        text: str,
+        target: str = "query",
+    ) -> Dict[str, Any]:
+        """Classify query or memory intent with the engine's local model (async)."""
+        response = await self.client.post(
+            "/intent/classify",
+            json={"text": text, "target": target},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to classify intent: {response.text}")
+        return response.json()
     
     async def recall(
         self,
@@ -804,7 +872,6 @@ class AsyncCueMap:
         disable_alias_expansion: bool = True,
         trace_timing: bool = False,
         expansion_depth: int = 1,
-        cuepacks: Optional[List[str]] = None,
         parent_fusion: str = "off",
         parent_fusion_limit: int = 80,
         parent_fusion_min_chunks: int = 2,
@@ -820,6 +887,8 @@ class AsyncCueMap:
         cuebridge_gap_limit: int = 6,
         disable_pattern_completion: Optional[bool] = None,
         disable_systems_consolidation: Optional[bool] = None,
+        semantic_mode: str = "hybrid",
+        query_embedding: Optional[List[float]] = None,
     ) -> List[RecallResult]:
         """Recall memories (async)."""
         payload = {
@@ -844,6 +913,8 @@ class AsyncCueMap:
             "evidence_coverage_max_sessions": evidence_coverage_max_sessions,
             "disable_cuebridge_artifacts": disable_cuebridge_artifacts,
             "cuebridge_gap_limit": cuebridge_gap_limit,
+            "semantic_mode": semantic_mode,
+            "query_embedding": query_embedding,
         }
         if cues:
             payload["cues"] = cues
@@ -855,9 +926,6 @@ class AsyncCueMap:
             payload["min_intersection"] = min_intersection
         if projects:
             payload["projects"] = projects
-        if cuepacks:
-            payload["cuepacks"] = cuepacks
-
         response = await self.client.post(
             "/recall",
             json=_clean_payload(payload),
@@ -886,7 +954,6 @@ class AsyncCueMap:
         disable_salience_bias: bool = False,
         disable_alias_expansion: bool = True,
         expansion_depth: int = 1,
-        cuepacks: Optional[List[str]] = None,
         disable_pattern_completion: Optional[bool] = None,
         disable_systems_consolidation: Optional[bool] = None,
     ) -> Dict[str, Any]:
@@ -903,7 +970,6 @@ class AsyncCueMap:
                 "disable_salience_bias": disable_salience_bias,
                 "disable_alias_expansion": disable_alias_expansion,
                 "expansion_depth": expansion_depth,
-                "cuepacks": cuepacks,
             }),
             headers=self._headers()
         )
@@ -993,12 +1059,14 @@ class AsyncCueMap:
         watch_dir: str,
         ignored_patterns: Optional[List[str]] = None,
         ignored_extensions: Optional[List[str]] = None,
+        included_paths: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Set the self-learning agent watch directory for a project (async)."""
         response = await self.client.post(
             f"/projects/{project_id}/watch-dir",
             json=_clean_payload({
                 "watch_dir": watch_dir,
+                "included_paths": included_paths,
                 "ignored_patterns": ignored_patterns,
                 "ignored_extensions": ignored_extensions,
             }),
@@ -1006,6 +1074,38 @@ class AsyncCueMap:
         )
         if response.status_code != 200:
             raise CueMapError(f"Failed to set project watch directory: {response.text}")
+        return response.json()
+
+    async def get_project_watch_dir(self, project_id: str) -> Dict[str, Any]:
+        """Read a project's persisted repository ingestion scope (async)."""
+        response = await self.client.get(
+            f"/projects/{project_id}/watch-dir",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to get project watch directory: {response.text}")
+        return response.json()
+
+    async def preview_directory(
+        self,
+        watch_dir: str,
+        included_paths: Optional[List[str]] = None,
+        ignored_patterns: Optional[List[str]] = None,
+        ignored_extensions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Preview supported repository files without ingesting content (async)."""
+        response = await self.client.post(
+            "/ingest/directory/preview",
+            json=_clean_payload({
+                "watch_dir": watch_dir,
+                "included_paths": included_paths,
+                "ignored_patterns": ignored_patterns,
+                "ignored_extensions": ignored_extensions,
+            }),
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to preview directory: {response.text}")
         return response.json()
 
     async def add_alias(self, from_cue: str, to_cue: str, weight: float = 1.0) -> bool:
@@ -1187,6 +1287,7 @@ class AsyncCueMap:
         source_key: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         structural_cues: Optional[List[str]] = None,
+        embeddings: Optional[List[List[float]]] = None,
         segmenter: str = "sentence_window",
         segment_window_size: Optional[int] = None,
         segment_overlap: Optional[int] = None,
@@ -1202,6 +1303,7 @@ class AsyncCueMap:
                 "source_key": source_key,
                 "metadata": metadata,
                 "structural_cues": structural_cues,
+                "embeddings": embeddings,
                 "segmenter": segmenter,
                 "segment_window_size": segment_window_size,
                 "segment_overlap": segment_overlap,
@@ -1237,7 +1339,6 @@ class AsyncCueMap:
         metadata: Optional[Dict[str, Any]] = None,
         existing_cues: Optional[List[str]] = None,
         available_cues: Optional[List[str]] = None,
-        cuepacks: Optional[List[str]] = None,
         filename: Optional[str] = None,
         segmenter: str = "sentence_window",
         segment_window_size: Optional[int] = None,
@@ -1254,7 +1355,6 @@ class AsyncCueMap:
                 "metadata": metadata,
                 "existing_cues": existing_cues,
                 "available_cues": available_cues,
-                "cuepacks": cuepacks,
                 "filename": filename,
                 "segmenter": segmenter,
                 "segment_window_size": segment_window_size,
