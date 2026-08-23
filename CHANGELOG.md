@@ -2,6 +2,19 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.7.2] - 2026-08-04
+
+### Added
+- Added `semantic_mode` (`lexical`, `semantic`, or `hybrid`) and optional `query_embedding` support to both synchronous and asynchronous recall clients.
+- Added optional `embedding` and `event_time` support to both memory-write clients, plus one-vector-per-produced-chunk `embeddings` for raw-content ingestion.
+- Added synchronous and asynchronous `classify_intent()` helpers for the engine's query/memory intent API.
+- Added directory preview, persisted include-path updates, and watch-scope reads to both clients.
+- Updated release documentation for the qint8 MiniLM-L3 default and q4 MiniLM-L3 edge profile.
+
+### Removed
+- Removed the old embedding-free client description; semantic retrieval is now an explicit, local engine capability rather than an experimental client-side feature.
+- Removed CuePack parameters because CuePacks are no longer part of the v0.7.2 Rust API.
+
 ## [0.7.1] - 2026-07-17
 
 ### Changed
