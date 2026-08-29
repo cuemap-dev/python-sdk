@@ -1,4 +1,17 @@
-# CueMap Python SDK
+<p align="center">
+  <img src="https://raw.githubusercontent.com/cuemap-dev/cuemap/main/landing-pagev3/public/cuemap-social-mark-v1.png" alt="CueMap" width="120">
+</p>
+
+<h1 align="center">CueMap Python SDK</h1>
+
+<p align="center">A polished Python client for fast, accurate, and explainable agent memory.</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/cuemap/"><img src="https://img.shields.io/pypi/v/cuemap?logo=pypi&logoColor=white" alt="PyPI"></a>
+  <a href="https://pypi.org/project/cuemap/"><img src="https://img.shields.io/pypi/pyversions/cuemap?logo=python&logoColor=white" alt="Python versions"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5e5ce6" alt="License"></a>
+  <a href="https://github.com/cuemap-dev/cuemap"><img src="https://img.shields.io/badge/engine-v0.7.3-0f766e" alt="Engine compatibility"></a>
+</p>
 
 **High-performance temporal-associative memory store** designed for dynamic contextual retrieval.
 
@@ -12,9 +25,9 @@ CueMap implements a **Continuous Gradient Algorithm** optimized for associative 
 4.  **Reinforcement (Access-based Learning)**: Frequently accessed memories gain signal strength, remaining highly accessible even as they age.
 5.  **Deterministic Facets & Intent Routing**: Extracts synchronous source, evidence, temporal, type, and entity facets, then uses sparse intent cues and reranking during recall.
 
-As of v0.7.2, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `all-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
+As of v0.7.3, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `all-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
 
-v0.7.2 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
+v0.7.3 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses. The SDK remains compatible with the Rust engine's Tree-sitter-backed Swift, Dart, Objective-C, and Kotlin ingestion paths.
 
 Use this SDK to talk to the Rust engine from Python applications.
 
@@ -99,9 +112,9 @@ print(response["proof"])
 # Cryptographic proof of context retrieval
 ```
 
-### v0.7.2 Recall Controls
+### v0.7.3 Recall Controls
 
-CueMap v0.7.2 adds local semantic query signals alongside temporal query intent and optional reconstruction passes for longer conversational/codebase context.
+CueMap v0.7.3 adds local semantic query signals alongside temporal query intent and optional reconstruction passes for longer conversational/codebase context.
 
 ```python
 results = client.recall(

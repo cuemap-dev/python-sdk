@@ -2,6 +2,12 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.7.3] - 2026-08-27
+
+### Changed
+- Synchronized the SDK patch release and documentation with CueMap Engine v0.7.3.
+- Documented compatibility with the engine's Tree-sitter-backed Swift, Dart, Objective-C, and Kotlin ingestion support.
+
 ## [0.7.2] - 2026-08-04
 
 ### Added
