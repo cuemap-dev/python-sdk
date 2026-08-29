@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/cuemap-dev/cuemap/main/landing-pagev3/public/cuemap-social-mark-v1.png" alt="CueMap" width="120">
+  <img src="https://cuemap.dev/cuemap-logo.PNG" alt="CueMap" width="120">
 </p>
 
 <h1 align="center">CueMap Python SDK</h1>
@@ -27,7 +27,7 @@ CueMap implements a **Continuous Gradient Algorithm** optimized for associative 
 
 As of v0.7.3, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `all-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
 
-v0.7.3 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses. The SDK remains compatible with the Rust engine's Tree-sitter-backed Swift, Dart, Objective-C, and Kotlin ingestion paths.
+v0.7.3 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
 
 Use this SDK to talk to the Rust engine from Python applications.
 
