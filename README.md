@@ -42,7 +42,7 @@ pip install cuemap
 ### 1. Start the Engine
 
 ```bash
-docker run -p 8080:8080 cuemap/engine:latest
+docker run -p 8735:8735 cuemap/engine:latest
 ```
 
 ### 2. Basic Usage

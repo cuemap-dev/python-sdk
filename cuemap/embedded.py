@@ -113,7 +113,7 @@ class EmbeddedCueMap:
         *,
         url: Optional[str] = None,
         bin_path: Optional[str] = None,
-        port: int = 8080,
+        port: int = 8735,
         config_path: Optional[str] = None,
         api_key: Optional[str] = None,
         startup_timeout: float = 15.0,

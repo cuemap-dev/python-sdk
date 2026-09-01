@@ -27,7 +27,7 @@ class CueMap:
     
     def __init__(
         self,
-        url: str = "http://localhost:8080",
+        url: str = "http://localhost:8735",
         api_key: Optional[str] = None,
         project_id: Optional[str] = None,
         timeout: float = 30.0
@@ -758,7 +758,7 @@ class AsyncCueMap:
     
     def __init__(
         self,
-        url: str = "http://localhost:8080",
+        url: str = "http://localhost:8735",
         api_key: Optional[str] = None,
         project_id: Optional[str] = None,
         timeout: float = 30.0

@@ -16,7 +16,7 @@ def test_add_sends_original_event_time():
     client = CueMap(project_id="hermes-main")
     client.client.close()
     client.client = httpx.Client(
-        base_url="http://localhost:8080",
+        base_url="http://localhost:8735",
         transport=httpx.MockTransport(handler),
     )
 
@@ -41,7 +41,7 @@ def test_recall_sends_v072_semantic_controls():
     client = CueMap(project_id="semantic-test")
     client.client.close()
     client.client = httpx.Client(
-        base_url="http://localhost:8080",
+        base_url="http://localhost:8735",
         transport=httpx.MockTransport(handler),
     )
 
@@ -77,7 +77,7 @@ def test_intent_classification_matches_engine_contract():
     client = CueMap(project_id="intent-test")
     client.client.close()
     client.client = httpx.Client(
-        base_url="http://localhost:8080",
+        base_url="http://localhost:8735",
         transport=httpx.MockTransport(handler),
     )
 
@@ -104,7 +104,7 @@ def test_repository_scope_and_chunk_embeddings_match_engine_schema():
     client = CueMap(project_id="repo-test")
     client.client.close()
     client.client = httpx.Client(
-        base_url="http://localhost:8080",
+        base_url="http://localhost:8735",
         transport=httpx.MockTransport(handler),
     )
 
@@ -131,9 +131,9 @@ def test_repository_scope_and_chunk_embeddings_match_engine_schema():
 def test_embedded_runtime_attaches_without_owning_process(monkeypatch):
     monkeypatch.setattr(embedded, "_inspect_engine", lambda _url, _api_key=None: "cuemap")
 
-    runtime = embedded.EmbeddedCueMap.start(url="http://localhost:8080/")
+    runtime = embedded.EmbeddedCueMap.start(url="http://localhost:8735/")
 
-    assert runtime.url == "http://localhost:8080"
+    assert runtime.url == "http://localhost:8735"
     assert runtime.owned is False
 
 
