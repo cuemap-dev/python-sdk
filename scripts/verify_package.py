@@ -19,7 +19,20 @@ def run(*args: str, cwd: Path = ROOT) -> None:
 with tempfile.TemporaryDirectory(prefix="cuemap-python-pack-") as temporary:
     output = Path(temporary) / "dist"
     output.mkdir()
-    run(sys.executable, "-m", "build", "--no-isolation", "--sdist", "--wheel", "--outdir", str(output))
+    # Run from the temporary directory so this repository's ignored `build/`
+    # artifact directory cannot shadow the `build` packaging module.
+    run(
+        sys.executable,
+        "-m",
+        "build",
+        "--no-isolation",
+        "--sdist",
+        "--wheel",
+        "--outdir",
+        str(output),
+        str(ROOT),
+        cwd=Path(temporary),
+    )
 
     environment = Path(temporary) / "venv"
     venv.EnvBuilder(with_pip=True).create(environment)
@@ -28,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix="cuemap-python-pack-") as temporary:
     if len(wheels) != 1:
         raise RuntimeError(f"expected exactly one CueMap wheel, found {len(wheels)}")
     wheel = wheels[0]
-    run(str(python), "-m", "pip", "install", "--no-deps", str(wheel), cwd=Path(temporary))
+    run(str(python), "-m", "pip", "install", str(wheel), cwd=Path(temporary))
     run(
         str(python),
         "-c",
