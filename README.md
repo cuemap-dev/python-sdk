@@ -112,6 +112,26 @@ print(response["proof"])
 # Cryptographic proof of context retrieval
 ```
 
+### Project memory lifecycle
+
+The engine can unload inactive project contexts while keeping their snapshots
+on disk. Normal project operations demand-load a project when needed, so the
+first request after an unload may take longer. Use the explicit helpers when
+you want to control residency:
+
+```python
+client.unload_project("older-repository")
+client.load_project("older-repository")
+client.save_project("older-repository")  # persist without unloading
+
+for project in client.list_projects():
+    print(project["project_id"], project["loaded"])
+```
+
+Portable projects use the same four operations as the CLI:
+`pack_project()`, `load_project_package()`, `push_project()`, and `pull_project()`.
+Use `sync_project(project_id, "s3://bucket/team")` for conflict-safe fast-forward sync.
+
 ### v0.7.3 Recall Controls
 
 CueMap v0.7.3 adds local semantic query signals alongside temporal query intent and optional reconstruction passes for longer conversational/codebase context.

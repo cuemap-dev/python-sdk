@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from cuemap import CueMap
 from cuemap import embedded
@@ -126,6 +127,130 @@ def test_repository_scope_and_chunk_embeddings_match_engine_schema():
     assert requests[1]["body"]["included_paths"] == ["src", "README.md"]
     assert requests[2]["method"] == "GET"
     assert requests[3]["body"]["embeddings"] == [[0.1, 0.2], [0.3, 0.4]]
+
+
+def test_project_lifecycle_methods_match_engine_routes():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        return httpx.Response(200, json={"status": "ok", "loaded": request.url.path.endswith("/load")})
+
+    client = CueMap(project_id="lifecycle-test")
+    client.client.close()
+    client.client = httpx.Client(
+        base_url="http://localhost:8735",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert client.load_project("repo-one")["loaded"] is True
+    assert client.save_project("repo-one")["status"] == "ok"
+    assert client.unload_project("repo-one")["loaded"] is False
+    assert requests == [
+        ("POST", "/projects/repo-one/load"),
+        ("POST", "/projects/repo-one/save"),
+        ("POST", "/projects/repo-one/unload"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_async_project_lifecycle_methods_match_engine_routes():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        return httpx.Response(200, json={"status": "ok"})
+
+    from cuemap import AsyncCueMap
+
+    client = AsyncCueMap(project_id="async-lifecycle-test")
+    await client.client.aclose()
+    client.client = httpx.AsyncClient(
+        base_url="http://localhost:8735",
+        transport=httpx.MockTransport(handler),
+    )
+
+    await client.load_project("repo-two")
+    await client.save_project("repo-two")
+    await client.unload_project("repo-two")
+    await client.close()
+
+    assert requests == [
+        ("POST", "/projects/repo-two/load"),
+        ("POST", "/projects/repo-two/save"),
+        ("POST", "/projects/repo-two/unload"),
+    ]
+
+
+def test_project_package_methods_match_engine_routes():
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path, request.content))
+        if request.url.path.endswith("/pack"):
+            return httpx.Response(200, content=b"CUEMAP01package")
+        return httpx.Response(200, json={"status": "ok"})
+
+    client = CueMap(project_id="package-test")
+    client.client.close()
+    client.client = httpx.Client(
+        base_url="http://localhost:8735",
+        transport=httpx.MockTransport(handler),
+    )
+
+    package = client.pack_project("repo-package")
+    assert package == b"CUEMAP01package"
+    client.load_project_package(package)
+    client.push_project("repo-package", "s3://bucket/team/")
+    client.pull_project("s3://bucket/team/repo-package.cuemap")
+    client.sync_project("repo-package", "s3://bucket/team-sync")
+
+    assert [(method, path) for method, path, _ in requests] == [
+        ("POST", "/projects/repo-package/pack"),
+        ("POST", "/projects/load"),
+        ("POST", "/projects/repo-package/push"),
+        ("POST", "/projects/pull"),
+        ("POST", "/projects/repo-package/sync"),
+    ]
+    assert requests[1][2] == package
+    assert json.loads(requests[2][2]) == {"destination": "s3://bucket/team/"}
+    assert json.loads(requests[3][2]) == {"source": "s3://bucket/team/repo-package.cuemap"}
+    assert json.loads(requests[4][2]) == {"remote": "s3://bucket/team-sync"}
+
+
+@pytest.mark.asyncio
+async def test_async_project_package_methods_match_engine_routes():
+    requests = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        if request.url.path.endswith("/pack"):
+            return httpx.Response(200, content=b"CUEMAP01async")
+        return httpx.Response(200, json={"status": "ok"})
+
+    from cuemap import AsyncCueMap
+
+    client = AsyncCueMap(project_id="async-package-test")
+    await client.client.aclose()
+    client.client = httpx.AsyncClient(
+        base_url="http://localhost:8735",
+        transport=httpx.MockTransport(handler),
+    )
+
+    package = await client.pack_project("repo-package-async")
+    await client.load_project_package(package)
+    await client.push_project("repo-package-async", "s3://bucket/team/")
+    await client.pull_project("s3://bucket/team/repo-package-async.cuemap")
+    await client.sync_project("repo-package-async", "s3://bucket/team-sync")
+    await client.close()
+
+    assert requests == [
+        ("POST", "/projects/repo-package-async/pack"),
+        ("POST", "/projects/load"),
+        ("POST", "/projects/repo-package-async/push"),
+        ("POST", "/projects/pull"),
+        ("POST", "/projects/repo-package-async/sync"),
+    ]
 
 
 def test_embedded_runtime_attaches_without_owning_process(monkeypatch):

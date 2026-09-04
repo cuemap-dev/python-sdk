@@ -9,6 +9,10 @@ All notable changes to the CueMap Python SDK will be documented in this file.
 - Documented compatibility with the engine's Tree-sitter-backed Swift, Dart, Objective-C, and Kotlin ingestion support.
 - Changed the default direct-client and embedded-engine port from `8080` to `8735`.
 
+### Added
+- Added synchronous and asynchronous project lifecycle methods plus portable project `pack`, `load`, `push`, and `pull`; project listings expose the engine's `loaded` state.
+- Added synchronous and asynchronous `sync_project()` for fast-forward S3 project history.
+
 ## [0.7.2] - 2026-08-04
 
 ### Added
