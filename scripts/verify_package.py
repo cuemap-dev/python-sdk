@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
 import sys
 import tempfile
 import venv
@@ -41,7 +42,10 @@ with tempfile.TemporaryDirectory(prefix="cuemap-python-pack-") as temporary:
     if len(wheels) != 1:
         raise RuntimeError(f"expected exactly one CueMap wheel, found {len(wheels)}")
     wheel = wheels[0]
-    run(str(python), "-m", "pip", "install", str(wheel), cwd=Path(temporary))
+    run(str(python), "-m", "pip", "install", str(wheel), "pytest", "pytest-asyncio", cwd=Path(temporary))
+    tests = Path(temporary) / "tests"
+    shutil.copytree(ROOT / "tests", tests, ignore=shutil.ignore_patterns("__pycache__"))
+    run(str(python), "-m", "pytest", "--import-mode=importlib", "-q", str(tests), cwd=Path(temporary))
     run(
         str(python),
         "-c",

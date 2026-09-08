@@ -34,7 +34,7 @@ def running_engine(tmp_path_factory):
         if not binary:
             binary = resolve_cuemap_binary()
     except FileNotFoundError as exc:
-        pytest.skip(str(exc))
+        pytest.fail(str(exc))
 
     data_dir = tmp_path_factory.mktemp("cuemap-e2e-data")
     runtime = EmbeddedCueMap.start(
@@ -43,6 +43,7 @@ def running_engine(tmp_path_factory):
         startup_timeout=30.0,
         env={
             "CUEMAP_DATA_DIR": str(data_dir),
+            "CUEMAP_HOME": str(data_dir / "config"),
             "CUEMAP_SEMANTIC_ENCODER_ENABLED": "false",
             "CUEMAP_SNAPSHOT_INTERVAL_SECONDS": "3600",
         },

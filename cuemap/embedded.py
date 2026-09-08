@@ -39,9 +39,11 @@ def _free_port() -> int:
 
 
 def _platform_package() -> str:
-    operating_system = platform.system().lower()
+    operating_system = {"Windows": "win32", "Darwin": "darwin", "Linux": "linux"}.get(platform.system())
     machine = platform.machine().lower()
-    architecture = "arm64" if machine in {"arm64", "aarch64"} else "x64"
+    architecture = {"arm64": "arm64", "aarch64": "arm64", "amd64": "x64", "x86_64": "x64"}.get(machine)
+    if operating_system is None or architecture is None or (operating_system == "win32" and architecture != "x64"):
+        raise RuntimeError(f"Unsupported CueMap platform: {platform.system()} {machine}")
     return f"@cuemap-dev/engine-{operating_system}-{architecture}"
 
 
@@ -49,9 +51,16 @@ def _npm_global_binary() -> Optional[str]:
     npm = shutil.which("npm")
     if not npm:
         return None
+    npm_command = [npm]
+    if platform.system() == "Windows":
+        node = shutil.which("node")
+        npm_cli = Path(npm).parent / "node_modules" / "npm" / "bin" / "npm-cli.js"
+        if not node or not npm_cli.is_file():
+            return None
+        npm_command = [node, str(npm_cli)]
     try:
         root = subprocess.run(
-            [npm, "root", "--global"],
+            [*npm_command, "root", "--global"],
             check=True,
             capture_output=True,
             text=True,
@@ -59,8 +68,8 @@ def _npm_global_binary() -> Optional[str]:
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
-    binary_name = "cuemap.exe" if os.name == "nt" else "cuemap"
-    candidate = Path(root) / _platform_package() / "bin" / binary_name
+    package_bin = Path(root) / _platform_package() / "bin"
+    candidate = package_bin / ("cuemap-native.exe" if platform.system() == "Windows" else "cuemap")
     return str(candidate) if candidate.is_file() else None
 
 
@@ -75,7 +84,7 @@ def resolve_cuemap_binary(explicit_path: Optional[str] = None) -> str:
         return str(path)
 
     installed = shutil.which("cuemap")
-    if installed:
+    if installed and Path(installed).suffix.lower() not in {".cmd", ".bat", ".ps1"}:
         return installed
 
     global_binary = _npm_global_binary()
@@ -138,13 +147,27 @@ class EmbeddedCueMap:
         selected_port = _free_port() if status == "occupied" else port
         selected_url = f"http://127.0.0.1:{selected_port}"
         executable = resolve_cuemap_binary(bin_path)
-        arguments = [executable, "start", "--port", str(selected_port)]
+        command = [executable]
+        if platform.system() == "Windows" and Path(executable).suffix.lower() != ".exe":
+            if Path(executable).suffix.lower() in {".cmd", ".bat", ".ps1"}:
+                raise ValueError("Use the native .exe or the npm package bin/cuemap wrapper, not a shell shim")
+            node = shutil.which("node")
+            if not node:
+                raise FileNotFoundError("Node.js is required to launch the CueMap npm wrapper")
+            command = [node, executable]
+        arguments = [*command, "start", "--port", str(selected_port)]
         if config_path:
             arguments.extend(["--config", str(Path(config_path).expanduser())])
         process_env = dict(os.environ)
         if env:
             process_env.update(env)
         process_env["CUEMAP_PORT"] = str(selected_port)
+        process_env["CUEMAP_HOST"] = "127.0.0.1"
+        tokenizer = Path(executable).parent.parent / "assets" / "en_tokenizer.bin"
+        if Path(executable).name == "cuemap-native.exe" and tokenizer.is_file():
+            process_env.setdefault("TOKENIZER_PATH", str(tokenizer))
+        if api_key:
+            process_env["CUEMAP_API_KEY"] = api_key
 
         log(f"Starting CueMap at {selected_url}")
         process = subprocess.Popen(
@@ -164,7 +187,7 @@ class EmbeddedCueMap:
                 return cls(selected_url, True, process, shutdown_timeout)
             time.sleep(0.1)
 
-        process.terminate()
+        cls(selected_url, True, process, shutdown_timeout).stop()
         raise TimeoutError(f"CueMap did not become ready within {startup_timeout:g}s")
 
     def stop(self) -> None:

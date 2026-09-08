@@ -17,7 +17,7 @@
 
 ## Overview
 
-CueMap implements a **Continuous Gradient Algorithm** optimized for associative data structures:
+CueMap uses **temporal-associative retrieval**: lexical and structural candidate generation, with optional semantic reranking. Its main components are:
 
 1.  **Intersection (Context Filter)**: Triangulates relevant memories by overlapping cues
 2.  **Local semantic reranking**: Uses bundled qint8 MiniLM-L3 by default, or q4 MiniLM-L3 with the edge profile, for bounded semantic ranking inside the engine.
@@ -25,7 +25,7 @@ CueMap implements a **Continuous Gradient Algorithm** optimized for associative 
 4.  **Reinforcement (Access-based Learning)**: Frequently accessed memories gain signal strength, remaining highly accessible even as they age.
 5.  **Deterministic Facets & Intent Routing**: Extracts synchronous source, evidence, temporal, type, and entity facets, then uses sparse intent cues and reranking during recall.
 
-As of v0.7.3, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `all-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
+As of v0.7.3, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `paraphrase-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
 
 v0.7.3 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
 
