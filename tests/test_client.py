@@ -267,3 +267,40 @@ def test_explicit_binary_resolution(tmp_path):
     executable.write_text("test")
 
     assert embedded.resolve_cuemap_binary(str(executable)) == str(executable)
+
+
+def test_preview_recall_sync_and_async():
+    import asyncio
+    from cuemap import AsyncCueMap, RecallPreviewResult
+
+    def handler(request):
+        payload = json.loads(request.content)
+        assert payload['response_mode'] == 'preview'
+        assert payload['preview_chars'] == 100
+        return httpx.Response(200, json={'response_mode': 'preview', 'results': [{
+            'memory_id': 1, 'preview': 'excerpt', 'content_truncated': True,
+            'content_length': 500, 'score': 1, 'intersection_count': 1,
+            'recency_score': 1, 'reinforcement_score': 0,
+        }]})
+
+    client = CueMap()
+    client.client.close()
+    client.client = httpx.Client(base_url='http://localhost:8735', transport=httpx.MockTransport(handler))
+    try:
+        hit = client.recall('discovery', response_mode='preview', preview_chars=100)[0]
+        assert isinstance(hit, RecallPreviewResult)
+        assert hit.preview == 'excerpt' and hit.content is None
+    finally:
+        client.client.close()
+
+    async def check():
+        client = AsyncCueMap()
+        await client.client.aclose()
+        client.client = httpx.AsyncClient(base_url='http://localhost:8735', transport=httpx.MockTransport(handler))
+        try:
+            hit = (await client.recall('discovery', response_mode='preview', preview_chars=100))[0]
+            assert isinstance(hit, RecallPreviewResult)
+            assert hit.content_truncated and hit.content is None
+        finally:
+            await client.client.aclose()
+    asyncio.run(check())

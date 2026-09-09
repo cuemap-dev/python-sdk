@@ -3,7 +3,7 @@
 import httpx
 from typing import List, Optional, Dict, Any
 
-from .models import Memory, RecallResult
+from .models import Memory, RecallResult, RecallPreviewResult
 from .exceptions import CueMapError, ConnectionError, AuthenticationError
 
 
@@ -185,6 +185,8 @@ class CueMap:
         disable_systems_consolidation: Optional[bool] = None,
         semantic_mode: str = "hybrid",
         query_embedding: Optional[List[float]] = None,
+        response_mode: str = "full",
+        preview_chars: int = 200,
     ) -> List[RecallResult]:
         """
         Recall memories by cues or natural language.
@@ -231,6 +233,8 @@ class CueMap:
             "cuebridge_gap_limit": cuebridge_gap_limit,
             "semantic_mode": semantic_mode,
             "query_embedding": query_embedding,
+            "response_mode": response_mode,
+            "preview_chars": preview_chars,
         }
         if cues:
             payload["cues"] = cues
@@ -257,7 +261,7 @@ class CueMap:
         if projects and isinstance(results, list) and len(results) > 0 and "project_id" in results[0]:
             return data
             
-        return [RecallResult(**r) for r in results]
+        return [(RecallPreviewResult if response_mode == "preview" else RecallResult)(**r) for r in results]
     
     def recall_grounded(
         self,
@@ -980,6 +984,8 @@ class AsyncCueMap:
         disable_systems_consolidation: Optional[bool] = None,
         semantic_mode: str = "hybrid",
         query_embedding: Optional[List[float]] = None,
+        response_mode: str = "full",
+        preview_chars: int = 200,
     ) -> List[RecallResult]:
         """Recall memories (async)."""
         payload = {
@@ -1006,6 +1012,8 @@ class AsyncCueMap:
             "cuebridge_gap_limit": cuebridge_gap_limit,
             "semantic_mode": semantic_mode,
             "query_embedding": query_embedding,
+            "response_mode": response_mode,
+            "preview_chars": preview_chars,
         }
         if cues:
             payload["cues"] = cues
@@ -1032,7 +1040,7 @@ class AsyncCueMap:
         if projects and isinstance(results, list) and len(results) > 0 and "project_id" in results[0]:
             return data
             
-        return [RecallResult(**r) for r in results]
+        return [(RecallPreviewResult if response_mode == "preview" else RecallResult)(**r) for r in results]
     
     async def recall_grounded(
         self,

@@ -248,3 +248,15 @@ async with AsyncCueMap() as client:
 ## License
 
 MIT
+
+### Recall previews
+
+The engine's `POST /recall` accepts `response_mode: "preview"` and optional
+`preview_chars` (100–2000 UTF-16 code units, default 200). Full content remains
+the default. Previews replace each hit's `content` with a leading `preview`,
+`content_truncated`, and `content_length`, preserving metadata and ranking.
+Use previews for broad discovery, then fetch a selected memory with
+`GET /memories/{id}?decoded=true` or read its source. Metadata and diagnostics
+are not capped. TypeScript request objects and Python sync/async `recall`
+accept these same options; Python returns `RecallPreviewResult` for ungrouped
+preview results. The updated engine is required.

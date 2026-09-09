@@ -19,7 +19,7 @@ Example:
 
 from .client import CueMap, AsyncCueMap
 from .embedded import EmbeddedCueMap, resolve_cuemap_binary
-from .models import Memory, RecallResult
+from .models import Memory, RecallResult, RecallPreviewResult
 from .exceptions import CueMapError, ConnectionError, AuthenticationError
 from .grounding import CueMapGroundingRetriever, AsyncCueMapGroundingRetriever
 
@@ -31,6 +31,7 @@ __all__ = [
     "resolve_cuemap_binary",
     "Memory",
     "RecallResult",
+    "RecallPreviewResult",
     "CueMapError",
     "ConnectionError",
     "AuthenticationError",
