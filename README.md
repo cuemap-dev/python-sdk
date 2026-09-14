@@ -1,10 +1,23 @@
-# CueMap Python SDK
+<p align="center">
+  <img src="https://cuemap.dev/cuemap-logo.PNG" alt="CueMap" width="120">
+</p>
+
+<h1 align="center">CueMap Python SDK</h1>
+
+<p align="center">A polished Python client for fast, accurate, and explainable agent memory.</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/cuemap/"><img src="https://img.shields.io/pypi/v/cuemap?logo=pypi&logoColor=white" alt="PyPI"></a>
+  <a href="https://pypi.org/project/cuemap/"><img src="https://img.shields.io/pypi/pyversions/cuemap?logo=python&logoColor=white" alt="Python versions"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5e5ce6" alt="License"></a>
+  <a href="https://github.com/cuemap-dev/cuemap"><img src="https://img.shields.io/badge/engine-v0.7.3-0f766e" alt="Engine compatibility"></a>
+</p>
 
 **High-performance temporal-associative memory store** designed for dynamic contextual retrieval.
 
 ## Overview
 
-CueMap implements a **Continuous Gradient Algorithm** optimized for associative data structures:
+CueMap uses **temporal-associative retrieval**: lexical and structural candidate generation, with optional semantic reranking. Its main components are:
 
 1.  **Intersection (Context Filter)**: Triangulates relevant memories by overlapping cues
 2.  **Local semantic reranking**: Uses bundled qint8 MiniLM-L3 by default, or q4 MiniLM-L3 with the edge profile, for bounded semantic ranking inside the engine.
@@ -12,9 +25,9 @@ CueMap implements a **Continuous Gradient Algorithm** optimized for associative 
 4.  **Reinforcement (Access-based Learning)**: Frequently accessed memories gain signal strength, remaining highly accessible even as they age.
 5.  **Deterministic Facets & Intent Routing**: Extracts synchronous source, evidence, temporal, type, and entity facets, then uses sparse intent cues and reranking during recall.
 
-As of v0.7.2, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `all-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
+As of v0.7.3, CueMap keeps deterministic lexical candidate discovery and adds bundled qint8 `paraphrase-MiniLM-L3-v2` for bounded hybrid semantic and intent reranking. The `edge` engine profile uses a q4 build of the same model. No runtime model download is required, and callers can disable the encoder or provide their own vectors.
 
-v0.7.2 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
+v0.7.3 also preserves numeric per-project memory IDs everywhere. If callers need deterministic upsert/dedupe identity, pass `source_key`; memory IDs remain compact runtime addresses.
 
 Use this SDK to talk to the Rust engine from Python applications.
 
@@ -29,7 +42,7 @@ pip install cuemap
 ### 1. Start the Engine
 
 ```bash
-docker run -p 8080:8080 cuemap/engine:latest
+docker run -p 8735:8735 cuemap/engine:latest
 ```
 
 ### 2. Basic Usage
@@ -99,9 +112,29 @@ print(response["proof"])
 # Cryptographic proof of context retrieval
 ```
 
-### v0.7.2 Recall Controls
+### Project memory lifecycle
 
-CueMap v0.7.2 adds local semantic query signals alongside temporal query intent and optional reconstruction passes for longer conversational/codebase context.
+The engine can unload inactive project contexts while keeping their snapshots
+on disk. Normal project operations demand-load a project when needed, so the
+first request after an unload may take longer. Use the explicit helpers when
+you want to control residency:
+
+```python
+client.unload_project("older-repository")
+client.load_project("older-repository")
+client.save_project("older-repository")  # persist without unloading
+
+for project in client.list_projects():
+    print(project["project_id"], project["loaded"])
+```
+
+Portable projects use the same four operations as the CLI:
+`pack_project()`, `load_project_package()`, `push_project()`, and `pull_project()`.
+Use `sync_project(project_id, "s3://bucket/team")` for conflict-safe fast-forward sync.
+
+### v0.7.3 Recall Controls
+
+CueMap v0.7.3 adds local semantic query signals alongside temporal query intent and optional reconstruction passes for longer conversational/codebase context.
 
 ```python
 results = client.recall(
@@ -215,3 +248,15 @@ async with AsyncCueMap() as client:
 ## License
 
 MIT
+
+### Recall previews
+
+The engine's `POST /recall` accepts `response_mode: "preview"` and optional
+`preview_chars` (100–2000 UTF-16 code units, default 200). Full content remains
+the default. Previews replace each hit's `content` with a leading `preview`,
+`content_truncated`, and `content_length`, preserving metadata and ranking.
+Use previews for broad discovery, then fetch a selected memory with
+`GET /memories/{id}?decoded=true` or read its source. Metadata and diagnostics
+are not capped. TypeScript request objects and Python sync/async `recall`
+accept these same options; Python returns `RecallPreviewResult` for ungrouped
+preview results. The updated engine is required.

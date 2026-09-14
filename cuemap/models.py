@@ -37,3 +37,11 @@ class RecallResult(BaseModel):
     structural_cues: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
     explain: Optional[Dict[str, Any]] = None
+
+
+class RecallPreviewResult(RecallResult):
+    """Engine-provided leading excerpt; fetch the memory for full evidence."""
+    content: Optional[str] = None
+    preview: str
+    content_truncated: bool
+    content_length: int

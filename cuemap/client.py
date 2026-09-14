@@ -3,7 +3,7 @@
 import httpx
 from typing import List, Optional, Dict, Any
 
-from .models import Memory, RecallResult
+from .models import Memory, RecallResult, RecallPreviewResult
 from .exceptions import CueMapError, ConnectionError, AuthenticationError
 
 
@@ -27,7 +27,7 @@ class CueMap:
     
     def __init__(
         self,
-        url: str = "http://localhost:8080",
+        url: str = "http://localhost:8735",
         api_key: Optional[str] = None,
         project_id: Optional[str] = None,
         timeout: float = 30.0
@@ -185,6 +185,8 @@ class CueMap:
         disable_systems_consolidation: Optional[bool] = None,
         semantic_mode: str = "hybrid",
         query_embedding: Optional[List[float]] = None,
+        response_mode: str = "full",
+        preview_chars: int = 200,
     ) -> List[RecallResult]:
         """
         Recall memories by cues or natural language.
@@ -231,6 +233,8 @@ class CueMap:
             "cuebridge_gap_limit": cuebridge_gap_limit,
             "semantic_mode": semantic_mode,
             "query_embedding": query_embedding,
+            "response_mode": response_mode,
+            "preview_chars": preview_chars,
         }
         if cues:
             payload["cues"] = cues
@@ -257,7 +261,7 @@ class CueMap:
         if projects and isinstance(results, list) and len(results) > 0 and "project_id" in results[0]:
             return data
             
-        return [RecallResult(**r) for r in results]
+        return [(RecallPreviewResult if response_mode == "preview" else RecallResult)(**r) for r in results]
     
     def recall_grounded(
         self,
@@ -302,14 +306,105 @@ class CueMap:
         
         return response.json()
 
-    def list_projects(self) -> List[str]:
-        """List all projects (multi-tenant only)."""
+    def list_projects(self) -> List[Dict[str, Any]]:
+        """List all projects and their runtime state (multi-tenant only).
+
+        Each item includes ``loaded`` so callers can distinguish a project
+        whose snapshot exists on disk from one currently resident in RAM.
+        """
         response = self.client.get(
             "/projects",
             headers=self._headers()
         )
         if response.status_code != 200:
             raise CueMapError(f"Failed to list projects: {response.text}")
+        return response.json()
+
+    def load_project(self, project_id: str) -> Dict[str, Any]:
+        """Load a project's snapshot into engine memory."""
+        response = self.client.post(
+            f"/projects/{project_id}/load",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to load project: {response.text}")
+        return response.json()
+
+    def save_project(self, project_id: str) -> Dict[str, Any]:
+        """Persist a current project snapshot without unloading it."""
+        response = self.client.post(
+            f"/projects/{project_id}/save",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to save project: {response.text}")
+        return response.json()
+
+    def unload_project(self, project_id: str) -> Dict[str, Any]:
+        """Persist and unload a project from engine memory."""
+        response = self.client.post(
+            f"/projects/{project_id}/unload",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to unload project: {response.text}")
+        return response.json()
+
+    def pack_project(self, project_id: str) -> bytes:
+        """Return a ready-to-query project as portable ``.cuemap`` bytes."""
+        response = self.client.post(
+            f"/projects/{project_id}/pack",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to pack project: {response.text}")
+        return response.content
+
+    def load_project_package(self, package: bytes) -> Dict[str, Any]:
+        """Install and warm a portable ``.cuemap`` package."""
+        response = self.client.post(
+            "/projects/load",
+            content=package,
+            headers={
+                **self._headers(),
+                "Content-Type": "application/vnd.cuemap.project",
+            },
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to load project package: {response.text}")
+        return response.json()
+
+    def push_project(self, project_id: str, destination: str) -> Dict[str, Any]:
+        """Pack and upload a project using the server's configured AWS CLI."""
+        response = self.client.post(
+            f"/projects/{project_id}/push",
+            json={"destination": destination},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to push project: {response.text}")
+        return response.json()
+
+    def pull_project(self, source: str) -> Dict[str, Any]:
+        """Download, install, and warm a project using the server's AWS CLI."""
+        response = self.client.post(
+            "/projects/pull",
+            json={"source": source},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to pull project: {response.text}")
+        return response.json()
+
+    def sync_project(self, project_id: str, remote: str) -> Dict[str, Any]:
+        """Fast-forward a project through its immutable S3 sync history."""
+        response = self.client.post(
+            f"/projects/{project_id}/sync",
+            json={"remote": remote},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to sync project: {response.text}")
         return response.json()
 
     def create_project(self, project_id: str) -> Dict[str, Any]:
@@ -758,7 +853,7 @@ class AsyncCueMap:
     
     def __init__(
         self,
-        url: str = "http://localhost:8080",
+        url: str = "http://localhost:8735",
         api_key: Optional[str] = None,
         project_id: Optional[str] = None,
         timeout: float = 30.0
@@ -889,6 +984,8 @@ class AsyncCueMap:
         disable_systems_consolidation: Optional[bool] = None,
         semantic_mode: str = "hybrid",
         query_embedding: Optional[List[float]] = None,
+        response_mode: str = "full",
+        preview_chars: int = 200,
     ) -> List[RecallResult]:
         """Recall memories (async)."""
         payload = {
@@ -915,6 +1012,8 @@ class AsyncCueMap:
             "cuebridge_gap_limit": cuebridge_gap_limit,
             "semantic_mode": semantic_mode,
             "query_embedding": query_embedding,
+            "response_mode": response_mode,
+            "preview_chars": preview_chars,
         }
         if cues:
             payload["cues"] = cues
@@ -941,7 +1040,7 @@ class AsyncCueMap:
         if projects and isinstance(results, list) and len(results) > 0 and "project_id" in results[0]:
             return data
             
-        return [RecallResult(**r) for r in results]
+        return [(RecallPreviewResult if response_mode == "preview" else RecallResult)(**r) for r in results]
     
     async def recall_grounded(
         self,
@@ -979,14 +1078,101 @@ class AsyncCueMap:
         
         return response.json()
 
-    async def list_projects(self) -> List[str]:
-        """List all projects (async, multi-tenant only)."""
+    async def list_projects(self) -> List[Dict[str, Any]]:
+        """List all projects and their runtime state (async, multi-tenant only)."""
         response = await self.client.get(
             "/projects",
             headers=self._headers()
         )
         if response.status_code != 200:
             raise CueMapError(f"Failed to list projects: {response.text}")
+        return response.json()
+
+    async def load_project(self, project_id: str) -> Dict[str, Any]:
+        """Load a project's snapshot into engine memory (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/load",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to load project: {response.text}")
+        return response.json()
+
+    async def save_project(self, project_id: str) -> Dict[str, Any]:
+        """Persist a current project snapshot without unloading it (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/save",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to save project: {response.text}")
+        return response.json()
+
+    async def unload_project(self, project_id: str) -> Dict[str, Any]:
+        """Persist and unload a project from engine memory (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/unload",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to unload project: {response.text}")
+        return response.json()
+
+    async def pack_project(self, project_id: str) -> bytes:
+        """Return a ready-to-query project as portable ``.cuemap`` bytes (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/pack",
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to pack project: {response.text}")
+        return response.content
+
+    async def load_project_package(self, package: bytes) -> Dict[str, Any]:
+        """Install and warm a portable ``.cuemap`` package (async)."""
+        response = await self.client.post(
+            "/projects/load",
+            content=package,
+            headers={
+                **self._headers(),
+                "Content-Type": "application/vnd.cuemap.project",
+            },
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to load project package: {response.text}")
+        return response.json()
+
+    async def push_project(self, project_id: str, destination: str) -> Dict[str, Any]:
+        """Pack and upload a project using the server's configured AWS CLI (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/push",
+            json={"destination": destination},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to push project: {response.text}")
+        return response.json()
+
+    async def pull_project(self, source: str) -> Dict[str, Any]:
+        """Download, install, and warm a project using the server's AWS CLI (async)."""
+        response = await self.client.post(
+            "/projects/pull",
+            json={"source": source},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to pull project: {response.text}")
+        return response.json()
+
+    async def sync_project(self, project_id: str, remote: str) -> Dict[str, Any]:
+        """Fast-forward a project through its immutable S3 sync history (async)."""
+        response = await self.client.post(
+            f"/projects/{project_id}/sync",
+            json={"remote": remote},
+            headers=self._headers(),
+        )
+        if response.status_code != 200:
+            raise CueMapError(f"Failed to sync project: {response.text}")
         return response.json()
 
     async def create_project(self, project_id: str) -> Dict[str, Any]:
