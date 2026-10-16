@@ -1,7 +1,7 @@
 """Pure CueMap client - no magic, just speed."""
 
 import httpx
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 
 from .models import Memory, RecallResult, RecallPreviewResult
 from .exceptions import CueMapError, ConnectionError, AuthenticationError
@@ -167,7 +167,7 @@ class CueMap:
         disable_salience_bias: bool = False,
         disable_alias_expansion: bool = True,
         trace_timing: bool = False,
-        expansion_depth: int = 1,
+        expansion_depth: Optional[Union[int, str]] = None,
         parent_fusion: str = "off",
         parent_fusion_limit: int = 80,
         parent_fusion_min_chunks: int = 2,
@@ -197,6 +197,11 @@ class CueMap:
             projects: List of project IDs for cross-domain queries
             limit: Maximum results to return
             depth: Number of multi-hop recall expansion hops
+            expansion_depth: Neighbour context per result. Unset uses the engine default,
+                "conversation_round": prepend the message each result replies to and
+                append the answer to the top result (needs session, turn and role
+                metadata; other memories are returned as they are). A number gives
+                source-order neighbours instead (1 = matched memory only)
             auto_reinforce: Automatically reinforce retrieved memories
             min_intersection: Minimum number of cues that must match
             explain: Include recall explanation in results
@@ -273,7 +278,7 @@ class CueMap:
         min_intersection: Optional[int] = None,
         disable_salience_bias: bool = False,
         disable_alias_expansion: bool = True,
-        expansion_depth: int = 1,
+        expansion_depth: Optional[Union[int, str]] = None,
         disable_pattern_completion: Optional[bool] = None,
         disable_systems_consolidation: Optional[bool] = None,
     ) -> Dict[str, Any]:
@@ -727,7 +732,12 @@ class CueMap:
         segment_min_chunk_chars: Optional[int] = None,
         segment_max_chunk_chars: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Ingest raw content."""
+        """Ingest raw content.
+
+        segmenter: "sentence_window" (default), "logical_block", or "conversation" for chat
+        histories (Claude or ChatGPT exports, JSON message lists, or role/speaker-labelled
+        transcripts): one memory per message with conversation, turn and role metadata.
+        """
         response = self.client.post(
             "/ingest/content",
             json=_clean_payload({
@@ -966,7 +976,7 @@ class AsyncCueMap:
         disable_salience_bias: bool = False,
         disable_alias_expansion: bool = True,
         trace_timing: bool = False,
-        expansion_depth: int = 1,
+        expansion_depth: Optional[Union[int, str]] = None,
         parent_fusion: str = "off",
         parent_fusion_limit: int = 80,
         parent_fusion_min_chunks: int = 2,
@@ -1052,7 +1062,7 @@ class AsyncCueMap:
         min_intersection: Optional[int] = None,
         disable_salience_bias: bool = False,
         disable_alias_expansion: bool = True,
-        expansion_depth: int = 1,
+        expansion_depth: Optional[Union[int, str]] = None,
         disable_pattern_completion: Optional[bool] = None,
         disable_systems_consolidation: Optional[bool] = None,
     ) -> Dict[str, Any]:

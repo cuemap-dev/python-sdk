@@ -23,7 +23,7 @@ from .models import Memory, RecallResult, RecallPreviewResult
 from .exceptions import CueMapError, ConnectionError, AuthenticationError
 from .grounding import CueMapGroundingRetriever, AsyncCueMapGroundingRetriever
 
-__version__ = "0.7.3"
+__version__ = "0.7.5"
 __all__ = [
     "CueMap",
     "AsyncCueMap",

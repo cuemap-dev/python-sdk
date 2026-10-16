@@ -2,6 +2,15 @@
 
 All notable changes to the CueMap Python SDK will be documented in this file.
 
+## [0.7.5] - 2026-10-14
+
+### Added
+- `ingest_content(..., segmenter="conversation")` for chat histories (Claude or ChatGPT exports, JSON message lists, role- or speaker-labelled transcripts): one memory per message with conversation, turn and role metadata.
+
+### Changed
+- Synchronized with CueMap Engine v0.7.5.
+- `expansion_depth` now accepts `"conversation_round"` and defaults to `None`, so recall uses the engine default (`"conversation_round"`: each result gets the message it replies to, and the top result gets its answer; memories without session, turn and role metadata are returned as they are). Pass `expansion_depth=1` for the previous matched-memory-only behaviour.
+
 ## [0.7.3] - 2026-08-27
 
 ### Changed
