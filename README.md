@@ -10,7 +10,7 @@
   <a href="https://pypi.org/project/cuemap/"><img src="https://img.shields.io/pypi/v/cuemap?logo=pypi&logoColor=white" alt="PyPI"></a>
   <a href="https://pypi.org/project/cuemap/"><img src="https://img.shields.io/pypi/pyversions/cuemap?logo=python&logoColor=white" alt="Python versions"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-5e5ce6" alt="License"></a>
-  <a href="https://github.com/cuemap-dev/cuemap"><img src="https://img.shields.io/badge/engine-v0.7.3-0f766e" alt="Engine compatibility"></a>
+  <a href="https://github.com/cuemap-dev/cuemap"><img src="https://img.shields.io/badge/engine-v0.7.5-0f766e" alt="Engine compatibility"></a>
 </p>
 
 **High-performance temporal-associative memory store** designed for dynamic contextual retrieval.
